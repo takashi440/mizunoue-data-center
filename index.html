@@ -103,6 +103,53 @@ header {
 /* LEAFLET */
 .leaflet-tile { filter:invert(1) hue-rotate(180deg) brightness(.55) saturate(.4); }
 .leaflet-top.leaflet-left { top:210px; left:14px; }
+
+/* DRAWER TOGGLE (mobile only) */
+#drawer-btn {
+  display:none;
+  position:absolute; bottom:20px; right:16px; z-index:900;
+  background:var(--red); border:none; color:#fff;
+  font-family:'Space Mono',monospace; font-size:11px; font-weight:700;
+  padding:10px 16px; border-radius:24px; cursor:pointer;
+  box-shadow:0 4px 20px rgba(255,100,100,.45);
+  letter-spacing:.08em;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .hstat-group { display:none; }
+  header { padding:7px 12px; gap:10px; }
+  .logo-text { font-size:10px; }
+  .logo-sub  { display:none; }
+  .date-badge { font-size:9px; padding:3px 8px; }
+  .toggle-btn { padding:5px 9px; font-size:10px; }
+
+  .sidebar {
+    position:absolute; bottom:0; left:0; right:0;
+    width:100%; height:62vh;
+    border-left:none; border-top:1px solid var(--brd);
+    border-radius:16px 16px 0 0;
+    transform:translateY(100%);
+    transition:transform .35s cubic-bezier(.4,0,.2,1);
+    z-index:800;
+  }
+  .sidebar.open { transform:translateY(0); }
+  .sb-head { position:relative; padding-top:20px; cursor:pointer; }
+  .sb-head::before {
+    content:''; display:block; width:36px; height:4px;
+    background:rgba(255,255,255,.2); border-radius:2px;
+    position:absolute; top:8px; left:50%; transform:translateX(-50%);
+  }
+
+  #panel-ticker { top:10px; left:10px; padding:9px 12px; min-width:155px; }
+  .tick-num  { font-size:15px; }
+  .tick-row  { margin-bottom:5px; }
+  #panel-top { display:none; }
+  #panel-leg { display:none; }
+
+  .leaflet-top.leaflet-left { top:auto; bottom:76px; left:10px; }
+  #drawer-btn { display:block; }
+}
 .custom-marker { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #ff6464; background:rgba(0,0,8,.85); color:#fff; font-family:'Space Mono',monospace; font-weight:700; cursor:pointer; }
 .leaflet-popup-content-wrapper { background:rgba(10,14,26,.96); border:1px solid rgba(255,100,100,.35); border-radius:6px; color:var(--txt); font-family:'Inter',sans-serif; box-shadow:0 4px 24px rgba(0,0,0,.5); }
 .leaflet-popup-tip { background:rgba(10,14,26,.96); }
@@ -160,6 +207,7 @@ header {
 <div class="main">
   <div id="map-wrap">
     <div id="map"></div>
+    <button id="drawer-btn" onclick="toggleDrawer()">≡ Flows</button>
 
     <!-- Live ticker -->
     <div class="map-panel" id="panel-ticker">
@@ -534,6 +582,18 @@ leafletMap.whenReady(async()=>{
   $('reloadBtn').addEventListener('click',async()=>{
     await fetchData($('datePicker').value); initMap();
   });
+});
+
+// DRAWER (mobile)
+function toggleDrawer(){
+  const sb=document.querySelector('.sidebar');
+  const btn=document.getElementById('drawer-btn');
+  const open=sb.classList.toggle('open');
+  btn.textContent=open?'✕ Close':'≡ Flows';
+}
+// tap handle bar to close
+document.querySelector('.sb-head').addEventListener('click',function(){
+  if(window.innerWidth<=768) toggleDrawer();
 });
 </script>
 </body>
