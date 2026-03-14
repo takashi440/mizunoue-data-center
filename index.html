@@ -287,18 +287,32 @@ function paletteColor(palette, r, staying){
   return{r:c[0],g:c[1],b:c[2]};
 }
 
-async function fetchWeather(){
+async function fetchWeather(date){
   try{
-    const res=await fetch('https://api.open-meteo.com/v1/forecast?latitude=34.7617&longitude=137.3870&current=weathercode,temperature_2m&timezone=Asia/Tokyo');
-    const json=await res.json();
-    const code=json.current.weathercode;
-    const temp=json.current.temperature_2m;
+    const jst = new Date(Date.now()+9*60*60*1000);
+    const today = jst.toISOString().slice(0,10);
+    const isToday = !date || date === today;
+
+    let code, temp;
+    if(isToday){
+      // 今日 → forecast API（current）
+      const res=await fetch('https://api.open-meteo.com/v1/forecast?latitude=34.7617&longitude=137.3870&current=weathercode,temperature_2m&timezone=Asia/Tokyo');
+      const json=await res.json();
+      code=json.current.weathercode;
+      temp=json.current.temperature_2m;
+    } else {
+      // 過去 → archive API（hourly 12時の値を代表値として使用）
+      const res=await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=34.7617&longitude=137.3870&start_date=${date}&end_date=${date}&hourly=weathercode,temperature_2m&timezone=Asia/Tokyo`);
+      const json=await res.json();
+      const idx=12; // 正午の値
+      code=json.hourly.weathercode[idx];
+      temp=json.hourly.temperature_2m[idx];
+    }
+
     const info=wmoToPalette(code);
     weather={code,temp,label:info.label,emoji:info.emoji,palette:info.palette};
-    // バッジ更新
     const badge=document.getElementById('weatherBadge');
-    if(badge) badge.textContent=`${info.emoji} ${info.label} ${temp}°C`;
-    // 凡例の色も更新
+    if(badge) badge.textContent=`${info.emoji} ${info.label} ${temp !== null ? temp+'°C' : ''}`;
     updateLegendColors();
   }catch(e){ console.warn('Weather fetch failed',e); }
 }
@@ -653,11 +667,11 @@ leafletMap.whenReady(async()=>{
   const jst=new Date(Date.now()+9*60*60*1000);
   const d=jst.toISOString().slice(0,10);
   $('datePicker').value=d;
-  fetchWeather();
+  fetchWeather(d);
   await fetchData(d);
   initMap();
   $('reloadBtn').addEventListener('click',async()=>{
-    await fetchData($('datePicker').value); initMap();
+    const rd=$('datePicker').value; fetchWeather(rd); await fetchData(rd); initMap();
   });
 });
 
