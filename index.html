@@ -463,7 +463,7 @@ new p5(function(s){
         this.r=cr; this.g=cg; this.b=cb;
       }
       this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
-      this.sz=2+r*5; this.jit=s.random(-.0004,.0004);
+      this.sz=1+r*3; this.jit=s.random(-.0004,.0004);
     }
     pos(){
       const fL=locations[this.flow.from],tL=locations[this.flow.to]; if(!fL||!tL)return null;
