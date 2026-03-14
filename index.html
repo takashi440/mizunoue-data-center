@@ -1,618 +1,536 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>来訪者動線マップ｜水上ビル商店街</title>
+<title>Visitor Flow Intelligence</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Space+Mono:wght@400;700&display=swap');
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:#0a0e1a; color:#e0e6f0; font-family:'Noto Sans JP',sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap');
 
-header {
-  padding:10px 20px;
-  background:rgba(10,14,26,0.97);
-  border-bottom:1px solid rgba(255,100,100,0.25);
-  display:flex; align-items:center; justify-content:space-between;
-  z-index:1000; flex-shrink:0; gap:16px;
+:root {
+  --red:   #ff6464;
+  --bg:    #0a0e1a;
+  --panel: rgba(10,14,26,0.96);
+  --brd:   rgba(255,100,100,0.18);
+  --mut:   #4a5568;
+  --sub:   #6b7a99;
+  --txt:   #e0e6f0;
 }
-header h1 { font-family:'Space Mono',monospace; font-size:12px; letter-spacing:0.12em; color:#ff6464; white-space:nowrap; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--txt); font-family:'Inter',sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 
-.toggle-group { display:flex; gap:6px; background:rgba(255,255,255,0.04); padding:4px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); }
-.toggle-btn { padding:5px 14px; border-radius:5px; border:none; background:transparent; color:#6b7a99; font-family:'Noto Sans JP',sans-serif; font-size:12px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
-.toggle-btn.active { background:#ff6464; color:#fff; font-weight:700; }
-.toggle-btn:hover:not(.active) { color:#e0e6f0; background:rgba(255,255,255,0.08); }
+/* HEADER */
+header {
+  padding:8px 18px;
+  background:var(--panel);
+  border-bottom:1px solid var(--brd);
+  display:flex; align-items:center; gap:18px;
+  z-index:1000; flex-shrink:0;
+}
+.logo { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.logo-mark { width:28px; height:28px; border-radius:6px; background:linear-gradient(135deg,#ff6464,#cc2222); display:flex; align-items:center; justify-content:center; font-size:14px; }
+.logo-text { font-family:'Space Mono',monospace; font-size:11px; letter-spacing:.13em; color:var(--red); line-height:1.4; }
+.logo-sub  { font-size:9px; color:var(--sub); letter-spacing:.08em; }
 
-header .date { font-size:11px; color:#6b7a99; font-family:'Space Mono',monospace; white-space:nowrap; }
+.hstat-group { display:flex; gap:0; flex:1; }
+.hstat { flex:1; padding:3px 14px; border-left:1px solid rgba(255,255,255,0.06); min-width:0; }
+.hstat-label { font-size:9px; letter-spacing:.12em; color:var(--mut); text-transform:uppercase; margin-bottom:1px; }
+.hstat-val   { font-family:'Space Mono',monospace; font-size:15px; font-weight:700; color:var(--txt); }
+.hstat-val span { font-size:9px; color:var(--sub); margin-left:2px; }
 
+.toggle-group { display:flex; gap:5px; background:rgba(255,255,255,0.04); padding:4px; border-radius:8px; border:1px solid rgba(255,255,255,0.07); flex-shrink:0; }
+.toggle-btn   { padding:5px 12px; border-radius:5px; border:none; background:transparent; color:var(--sub); font-family:'Inter',sans-serif; font-size:11px; cursor:pointer; transition:all .2s; white-space:nowrap; }
+.toggle-btn.active { background:var(--red); color:#fff; font-weight:700; }
+.toggle-btn:hover:not(.active) { color:var(--txt); background:rgba(255,255,255,0.07); }
+
+.date-badge { font-family:'Space Mono',monospace; font-size:10px; color:var(--sub); flex-shrink:0; border:1px solid rgba(255,255,255,0.08); padding:4px 10px; border-radius:5px; }
+
+/* LAYOUT */
 .main { display:flex; flex:1; overflow:hidden; }
 #map-wrap { flex:1; position:relative; overflow:hidden; }
-#map { width:100%; height:100%; background:#0a0e1a; }
+#map { width:100%; height:100%; background:var(--bg); }
 
-.sidebar {
-  width:255px; background:rgba(10,14,26,0.97);
-  border-left:1px solid rgba(255,100,100,0.15);
-  display:flex; flex-direction:column; overflow:hidden; flex-shrink:0;
-}
-.sidebar-title { padding:12px 16px; font-family:'Space Mono',monospace; font-size:10px; letter-spacing:0.2em; color:#ff6464; text-transform:uppercase; border-bottom:1px solid rgba(255,100,100,0.1); }
-.flow-list { overflow-y:auto; flex:1; padding:6px 0; }
-.flow-item { padding:9px 14px; border-bottom:1px solid rgba(255,255,255,0.04); cursor:pointer; transition:background 0.15s; display:flex; align-items:center; gap:10px; }
-.flow-item:hover { background:rgba(255,100,100,0.06); }
-.flow-item.active { background:rgba(255,100,100,0.12); }
+/* MAP OVERLAY PANELS */
+.map-panel { position:absolute; z-index:650; background:var(--panel); border:1px solid var(--brd); border-radius:8px; padding:12px 15px; pointer-events:none; backdrop-filter:blur(4px); }
+
+#panel-ticker { top:14px; left:14px; min-width:185px; }
+.ticker-head { font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); margin-bottom:9px; display:flex; align-items:center; gap:7px; }
+.live-dot { width:6px; height:6px; border-radius:50%; background:#44ff88; box-shadow:0 0 6px #44ff88; animation:blink 1.6s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:.25} }
+.tick-row  { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px; }
+.tick-key  { font-size:10px; color:var(--sub); }
+.tick-num  { font-family:'Space Mono',monospace; font-size:19px; font-weight:700; color:var(--txt); transition:color .4s; }
+.tick-unit { font-size:9px; color:var(--mut); margin-left:2px; }
+.tick-num.flash { color:#44ff88; }
+
+#panel-top { bottom:20px; left:14px; min-width:200px; }
+.top-lbl   { font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--mut); margin-bottom:5px; }
+.top-route { font-size:13px; font-weight:700; color:var(--red); letter-spacing:.02em; margin-bottom:3px; }
+.top-meta  { font-size:10px; color:var(--sub); }
+.top-meta b { color:var(--txt); }
+
+#panel-leg { bottom:20px; right:270px; }
+.leg-row   { display:flex; align-items:center; gap:8px; font-size:10px; color:var(--sub); margin-bottom:4px; }
+.leg-dot   { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+/* SIDEBAR */
+.sidebar { width:255px; background:var(--panel); border-left:1px solid var(--brd); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+.sb-head  { padding:11px 16px; font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.22em; color:var(--red); text-transform:uppercase; border-bottom:1px solid var(--brd); display:flex; justify-content:space-between; align-items:center; }
+.sb-cnt   { font-size:10px; color:var(--sub); background:rgba(255,100,100,.1); padding:2px 7px; border-radius:4px; }
+.flow-list { overflow-y:auto; flex:1; padding:4px 0; }
+.flow-item { padding:9px 14px; border-bottom:1px solid rgba(255,255,255,.04); cursor:pointer; transition:background .15s; display:flex; align-items:center; gap:10px; }
+.flow-item:hover  { background:rgba(255,100,100,.06); }
+.flow-item.active { background:rgba(255,100,100,.12); }
 .flow-item.hidden { display:none; }
-.flow-swatch { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-.flow-bar-wrap { flex:1; min-width:0; }
-.flow-route { font-size:11px; font-weight:700; color:#c8d4e8; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.flow-meta { font-size:10px; color:#4a5568; margin-bottom:3px; }
-.flow-bar-bg { height:3px; background:rgba(255,255,255,0.07); border-radius:2px; overflow:hidden; }
-.flow-bar { height:100%; border-radius:2px; }
-.flow-count { font-family:'Space Mono',monospace; font-size:12px; font-weight:700; min-width:38px; text-align:right; }
+.flow-rank { font-family:'Space Mono',monospace; font-size:9px; color:var(--mut); min-width:16px; text-align:right; }
+.flow-rank.r1{color:#ffd700} .flow-rank.r2{color:#c0c0c0} .flow-rank.r3{color:#cd7f32}
+.flow-swatch { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.flow-bwrap  { flex:1; min-width:0; }
+.flow-route  { font-size:11px; font-weight:700; color:#c8d4e8; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.flow-meta   { font-size:9px; color:var(--mut); margin-bottom:3px; display:flex; gap:8px; }
+.flow-bbg    { height:2px; background:rgba(255,255,255,.07); border-radius:2px; overflow:hidden; }
+.flow-bar    { height:100%; border-radius:2px; transition:width .7s ease; }
+.flow-cnt    { font-family:'Space Mono',monospace; font-size:12px; font-weight:700; min-width:36px; text-align:right; }
 
-.legend { padding:12px 16px; border-top:1px solid rgba(255,100,100,0.1); font-size:10px; color:#6b7a99; }
-.legend-label { font-size:9px; letter-spacing:0.1em; text-transform:uppercase; color:#4a5568; margin-bottom:6px; }
-.heatmap-bar { height:8px; border-radius:4px; background:linear-gradient(to right,#ffcccc,#ff6464,#990000); margin-bottom:4px; }
-.heatmap-labels { display:flex; justify-content:space-between; font-size:9px; color:#4a5568; margin-bottom:10px; }
-.legend-item { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
-.legend-dot-stay { width:10px; height:10px; border-radius:50%; background:radial-gradient(circle,#ffaa60,#ff3030); box-shadow:0 0 6px #ff6040; }
-.legend-dot-pass { width:10px; height:10px; border-radius:50%; background:radial-gradient(circle,#88ddff,#4488ff); box-shadow:0 0 6px #66aaff; }
+.sb-foot     { padding:12px 16px; border-top:1px solid var(--brd); font-size:10px; color:var(--sub); }
+.sf-row      { display:flex; justify-content:space-between; margin-bottom:4px; }
+.sf-bbg      { height:4px; background:rgba(255,255,255,.06); border-radius:2px; overflow:hidden; margin-bottom:8px; }
+.sf-bar      { height:100%; border-radius:2px; transition:width .8s ease; }
 
-.leaflet-tile { filter:brightness(0.9) saturate(0.3) hue-rotate(180deg) invert(1) brightness(0.45); }
-.custom-marker { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #ff6464; background:rgba(0,0,8,0.85); color:#fff; font-family:'Space Mono',monospace; font-weight:700; cursor:pointer; position:relative; }
-.leaflet-popup-content-wrapper { background:rgba(10,14,26,0.96); border:1px solid rgba(255,100,100,0.35); border-radius:6px; color:#e0e6f0; font-family:'Noto Sans JP',sans-serif; box-shadow:0 4px 24px rgba(0,0,0,0.5); }
-.leaflet-popup-tip { background:rgba(10,14,26,0.96); }
-.popup-title { font-weight:700; font-size:13px; color:#ff6464; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(255,100,100,0.2); }
-.popup-row { font-size:12px; color:#718096; margin-bottom:4px; display:flex; justify-content:space-between; gap:12px; }
-.popup-row span { color:#e0e6f0; font-weight:700; }
+/* LEAFLET */
+.leaflet-tile { filter:brightness(.9) saturate(.3) hue-rotate(180deg) invert(1) brightness(.45); }
+.custom-marker { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #ff6464; background:rgba(0,0,8,.85); color:#fff; font-family:'Space Mono',monospace; font-weight:700; cursor:pointer; }
+.leaflet-popup-content-wrapper { background:rgba(10,14,26,.96); border:1px solid rgba(255,100,100,.35); border-radius:6px; color:var(--txt); font-family:'Inter',sans-serif; box-shadow:0 4px 24px rgba(0,0,0,.5); }
+.leaflet-popup-tip { background:rgba(10,14,26,.96); }
+.popup-title { font-weight:700; font-size:13px; color:var(--red); margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid rgba(255,100,100,.2); }
+.popup-row   { font-size:12px; color:var(--sub); margin-bottom:4px; display:flex; justify-content:space-between; gap:12px; }
+.popup-row span { color:var(--txt); font-weight:700; }
+.popup-bbg  { height:3px; background:rgba(255,255,255,.08); border-radius:2px; overflow:hidden; margin-top:8px; }
+.popup-bar  { height:100%; border-radius:2px; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🗺 Visitor Flow — 水上ビル商店街</h1>
-  <div class="toggle-group">
-    <button class="toggle-btn active" data-mode="all">すべて</button>
-    <button class="toggle-btn" data-mode="passing">素通り <small style="opacity:0.6">＜150m</small></button>
-    <button class="toggle-btn" data-mode="staying">立ち寄り <small style="opacity:0.6">≥150m</small></button>
+  <div class="logo">
+    <div class="logo-mark">🗺</div>
+    <div>
+      <div class="logo-text">VISITOR FLOW INTELLIGENCE</div>
+      <div class="logo-sub">Urban Pedestrian Analytics</div>
+    </div>
   </div>
-  <div class="date">—</div>
+
+  <div class="hstat-group">
+    <div class="hstat">
+      <div class="hstat-label">Total Visitors</div>
+      <div class="hstat-val" id="hTotal">—<span>pax</span></div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Active Flows</div>
+      <div class="hstat-val" id="hFlows">—<span>routes</span></div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Avg Dwell</div>
+      <div class="hstat-val" id="hDwell">—<span>min</span></div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Staying Rate</div>
+      <div class="hstat-val" id="hStay">—<span>%</span></div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">Peak Node</div>
+      <div class="hstat-val" id="hPeak" style="font-size:12px;">—</div>
+    </div>
+  </div>
+
+  <div class="toggle-group">
+    <button class="toggle-btn active" data-mode="all">All</button>
+    <button class="toggle-btn" data-mode="passing">Passing <small style="opacity:.55">&lt;150m</small></button>
+    <button class="toggle-btn" data-mode="staying">Staying <small style="opacity:.55">≥150m</small></button>
+  </div>
+  <div class="date-badge" id="dateBadge">—</div>
 </header>
 
-<div id="loading" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,26,0.95);border:1px solid rgba(255,100,100,0.4);padding:16px 28px;border-radius:8px;color:#ff6464;font-family:'Space Mono',monospace;font-size:13px;z-index:9999;letter-spacing:0.1em;">読込中...</div>
+<div id="loading" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,26,.95);border:1px solid rgba(255,100,100,.4);padding:16px 28px;border-radius:8px;color:#ff6464;font-family:'Space Mono',monospace;font-size:13px;z-index:9999;letter-spacing:.1em;"></div>
 
 <div class="main">
   <div id="map-wrap">
     <div id="map"></div>
-    <!-- p5キャンバスはここに動的挿入 -->
+
+    <!-- Live ticker -->
+    <div class="map-panel" id="panel-ticker">
+      <div class="ticker-head"><div class="live-dot"></div>Live · Today</div>
+      <div class="tick-row"><span class="tick-key">Total Visitors</span><span><span class="tick-num" id="tTotal">—</span><span class="tick-unit">pax</span></span></div>
+      <div class="tick-row"><span class="tick-key">Detected Nodes</span><span><span class="tick-num" id="tNodes">—</span><span class="tick-unit">pts</span></span></div>
+      <div class="tick-row"><span class="tick-key">Active Flows</span><span><span class="tick-num" id="tFlows">—</span><span class="tick-unit">routes</span></span></div>
+      <div class="tick-row"><span class="tick-key">Staying Rate</span><span><span class="tick-num" id="tStay">—</span><span class="tick-unit">%</span></span></div>
+    </div>
+
+    <!-- Top route -->
+    <div class="map-panel" id="panel-top">
+      <div class="top-lbl">▲ Top Route</div>
+      <div class="top-route" id="topName">—</div>
+      <div class="top-meta" id="topMeta">—</div>
+    </div>
+
+    <!-- Legend -->
+    <div class="map-panel" id="panel-leg">
+      <div class="leg-row"><div class="leg-dot" style="background:radial-gradient(#ffaa60,#ff3030);box-shadow:0 0 5px #ff6040;"></div>Staying ≥150m</div>
+      <div class="leg-row"><div class="leg-dot" style="background:radial-gradient(#88ddff,#4488ff);box-shadow:0 0 5px #66aaff;"></div>Passing &lt;150m</div>
+      <div style="font-size:9px;color:#4a5568;margin-top:5px;line-height:1.8;">Node size = visitor count<br>Ring pulse = presence intensity</div>
+    </div>
   </div>
+
   <div class="sidebar">
-    <div class="sidebar-title">動線ランキング</div>
+    <div class="sb-head">Flow Ranking<span class="sb-cnt" id="sbCnt">0 routes</span></div>
     <div class="flow-list" id="flowList"></div>
-    <div class="legend">
-      <div class="legend-label">来訪者数</div>
-      <div class="heatmap-bar"></div>
-      <div class="heatmap-labels"><span>少</span><span>多</span></div>
-      <div class="legend-label">パーティクル種別</div>
-      <div class="legend-item"><div class="legend-dot-stay"></div><span>立ち寄り（≥150m）暖色</span></div>
-      <div class="legend-item"><div class="legend-dot-pass"></div><span>素通り（＜150m）寒色</span></div>
-      <div style="margin-top:10px;" class="legend-label">拠点マーカー</div>
-      <div style="font-size:10px;color:#6b7a99;line-height:1.9;">
-        サイズ＝来訪者数<br>
-        リング＝在場強度<br>
-        <span style="display:inline-flex;gap:4px;align-items:center;">
-          <span style="color:#555566;">●</span>少
-          <span style="color:#6699cc;">→</span>
-          <span style="color:#aaddff;">●</span>多
-        </span>
-      </div>
+    <div class="sb-foot">
+      <div class="sf-row"><span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);">Visitor Split</span></div>
+      <div class="sf-row"><span>Staying</span><span id="sfStay" style="color:var(--txt);font-weight:700;">—</span></div>
+      <div class="sf-bbg"><div class="sf-bar" id="sfStayBar" style="width:0%;background:linear-gradient(to right,#ffaa60,#ff3030);"></div></div>
+      <div class="sf-row"><span>Passing</span><span id="sfPass" style="color:var(--txt);font-weight:700;">—</span></div>
+      <div class="sf-bbg"><div class="sf-bar" id="sfPassBar" style="width:0%;background:linear-gradient(to right,#88ddff,#4488ff);"></div></div>
     </div>
   </div>
 </div>
 
 <script>
-// =====================================================
-// 設定
-// =====================================================
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx044_Lz32U4iWo3dvQ1-7wp-OY8SQqf_DjgIhw_XtjRcof2JLW83JdRz1c9Xw6YZ81/exec';
 
-// =====================================================
-// グローバル状態
-// =====================================================
-let locations    = {};
-let flows        = [];
-let maxCount     = 1;
-let minCount     = 0;
-let presence     = {};
-let presenceMax  = 1;
-let currentMode  = 'all';
-let dataReady    = false;
-let sortedFlows  = [];      // サイドバー表示順
+let locations={}, flows=[], maxCount=1, minCount=0, presence={}, presenceMax=1;
+let currentMode='all', dataReady=false, sortedFlows=[];
+const leafletMarkers=[], sideItems=[];
 
-const leafletMarkers = [];
-const sideItems      = [];
+const $=id=>document.getElementById(id);
+const show=m=>{$('loading').textContent=m;$('loading').style.display='block';};
+const hide=()=>{$('loading').style.display='none';};
 
-// =====================================================
-// ユーティリティ
-// =====================================================
-function showLoading(msg) {
-  const el = document.getElementById('loading');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-function hideLoading() { document.getElementById('loading').style.display = 'none'; }
-
-function heatColor(count, alpha=1, mn=null, mx=null) {
-  const lo = mn !== null ? mn : minCount;
-  const hi = mx !== null ? mx : maxCount;
-  const t  = hi === lo ? 1 : (count - lo) / (hi - lo);
+function heatColor(count,alpha=1,mn=null,mx=null){
+  const lo=mn!==null?mn:minCount, hi=mx!==null?mx:maxCount;
+  const t=hi===lo?1:(count-lo)/(hi-lo);
   return `rgba(255,${Math.round(180*(1-t))},${Math.round(180*(1-t))},${alpha})`;
 }
-function isStaying(d)   { return d >= 150; }
-function isVisible(flow) {
-  const st = isStaying(flow.distance);
-  return currentMode === 'all'
-      || (currentMode === 'passing' && !st)
-      || (currentMode === 'staying' &&  st);
-}
-
-// =====================================================
-// データ取得（GAS → BigQuery）
-// =====================================================
-async function fetchData(date) {
-  showLoading('データ取得中...');
-  dataReady = false;
-  try {
-    const res  = await fetch(`${GAS_API_URL}?date=${date}`);
-    const json = await res.json();
-    if (json.error) throw new Error(json.error);
-
-    locations = {};
-    json.locations.forEach(loc => {
-      locations[loc.loc_id] = { lat: parseFloat(loc.lat), lng: parseFloat(loc.lng) };
-    });
-
-    flows = json.flows.map(f => ({
-      from:     f.from_loc,
-      to:       f.to_loc,
-      count:    parseInt(f.count),
-      distance: parseFloat(f.distance),
-    }));
-
-    maxCount = Math.max(...flows.map(f => f.count), 1);
-    minCount = Math.min(...flows.map(f => f.count), 0);
-
-    presence    = {};
-    (json.presence || []).forEach(p => {
-      presence[p.loc_id] = { count: parseInt(p.count), avg_dwell: parseFloat(p.avg_dwell) };
-    });
-    presenceMax = Math.max(...Object.values(presence).map(p => p.count), 1);
-
-    document.querySelector('header .date').textContent = json.date;
-    hideLoading();
-    dataReady = true;
-    return true;
-  } catch(err) {
-    showLoading('❌ データ取得失敗: ' + err.message);
-    return false;
-  }
-}
-
-// =====================================================
-// Leaflet 地図
-// =====================================================
-const leafletMap = L.map('map', { center:[34.7617,137.3870], zoom:17 });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution:'© OpenStreetMap contributors'
-}).addTo(leafletMap);
-
-// 日付ピッカー
-const dateControl = L.control({ position:'topright' });
-dateControl.onAdd = function() {
-  const div = L.DomUtil.create('div');
-  div.innerHTML = `
-    <div style="background:rgba(10,14,26,0.95);border:1px solid rgba(255,100,100,0.3);
-      border-radius:6px;padding:8px 12px;display:flex;gap:8px;align-items:center;">
-      <input type="date" id="datePicker"
-        style="background:#111;border:1px solid rgba(255,100,100,0.3);color:#e0e6f0;
-          border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;">
-      <button id="reloadBtn"
-        style="background:#ff6464;border:none;color:#fff;border-radius:4px;
-          padding:4px 10px;font-size:12px;cursor:pointer;font-weight:700;">更新</button>
-    </div>`;
-  L.DomEvent.disableClickPropagation(div);
-  return div;
+const isStaying=d=>d>=150;
+const isVisible=f=>{
+  const st=isStaying(f.distance);
+  return currentMode==='all'||(currentMode==='passing'&&!st)||(currentMode==='staying'&&st);
 };
-dateControl.addTo(leafletMap);
 
-// =====================================================
-// p5.js パーティクルスケッチ
-// =====================================================
-let needsClear = false;   // 地図移動時：パーティクルをフラッシュ
+function animCount(el,target,dur=900){
+  const start=parseInt(el.dataset.val||0);
+  el.dataset.val=target;
+  const t0=performance.now();
+  (function step(now){
+    const p=Math.min((now-t0)/dur,1), e=1-Math.pow(1-p,3);
+    el.textContent=Math.round(start+(target-start)*e).toLocaleString();
+    if(p<1)requestAnimationFrame(step);
+  })(t0);
+}
 
-leafletMap.on('movestart zoomstart', () => { needsClear = true;  });
-leafletMap.on('moveend  zoomend',   () => { needsClear = false; });
+async function fetchData(date){
+  show('Loading data...'); dataReady=false;
+  try{
+    const res=await fetch(`${GAS_API_URL}?date=${date}`);
+    const json=await res.json();
+    if(json.error) throw new Error(json.error);
+    locations={};
+    json.locations.forEach(l=>{locations[l.loc_id]={lat:parseFloat(l.lat),lng:parseFloat(l.lng)};});
+    flows=json.flows.map(f=>({from:f.from_loc,to:f.to_loc,count:parseInt(f.count),distance:parseFloat(f.distance)}));
+    maxCount=Math.max(...flows.map(f=>f.count),1);
+    minCount=Math.min(...flows.map(f=>f.count),0);
+    presence={};
+    (json.presence||[]).forEach(p=>{presence[p.loc_id]={count:parseInt(p.count),avg_dwell:parseFloat(p.avg_dwell)};});
+    presenceMax=Math.max(...Object.values(presence).map(p=>p.count),1);
+    $('dateBadge').textContent=json.date;
+    hide(); dataReady=true; return true;
+  }catch(e){ show('❌ Load failed: '+e.message); return false; }
+}
 
-new p5(function(s) {
+function updateStats(){
+  const totalV=Object.values(presence).reduce((s,p)=>s+p.count,0);
+  const stayF=flows.filter(f=>isStaying(f.distance));
+  const passF=flows.filter(f=>!isStaying(f.distance));
+  const stayC=stayF.reduce((s,f)=>s+f.count,0);
+  const passC=passF.reduce((s,f)=>s+f.count,0);
+  const stayR=(stayC+passC)>0?Math.round(stayC/(stayC+passC)*100):0;
+  const dwells=Object.values(presence).filter(p=>p.avg_dwell>0).map(p=>p.avg_dwell);
+  const avgD=dwells.length?(dwells.reduce((a,b)=>a+b,0)/dwells.length).toFixed(1):'—';
+  const peak=Object.entries(presence).sort((a,b)=>b[1].count-a[1].count)[0];
 
-  let particles = [];
+  // header
+  const hEl=$('hTotal'); hEl.innerHTML=`<span id="_hT"></span><span>pax</span>`;
+  animCount($('_hT'),totalV);
+  $('hFlows').innerHTML=flows.length+'<span>routes</span>';
+  $('hDwell').innerHTML=avgD+'<span>min</span>';
+  $('hStay').innerHTML=stayR+'<span>%</span>';
+  $('hPeak').textContent=peak?peak[0]:'—';
 
-  // --------------------------------------------------
-  // Particle クラス
-  // --------------------------------------------------
-  class Particle {
-    constructor(flow) {
-      this.flow = flow;
-      this.t    = 0;
-      this.speed = s.random(0.003, 0.010);
-      this.alive = true;
+  // ticker
+  animCount($('tTotal'),totalV);
+  animCount($('tNodes'),Object.keys(presence).length);
+  animCount($('tFlows'),flows.length);
+  animCount($('tStay'),stayR);
 
-      const ratio = maxCount > minCount
-        ? (flow.count - minCount) / (maxCount - minCount) : 1;
+  // top route
+  if(flows.length){
+    const top=[...flows].sort((a,b)=>b.count-a.count)[0];
+    $('topName').textContent=`${top.from} → ${top.to}`;
+    $('topMeta').innerHTML=`<b>${top.count.toLocaleString()}</b> visitors · <b>${top.distance}m</b> · ${isStaying(top.distance)?'Staying':'Passing'}`;
+  }
 
-      if (isStaying(flow.distance)) {
-        // 立ち寄り → 暖色（赤〜橙）
-        this.r = 255;
-        this.g = Math.round(130 - ratio * 90);
-        this.b = Math.round(60  - ratio * 50);
-      } else {
-        // 素通り → 寒色（水色〜青）
-        this.r = Math.round(50  + ratio * 80);
-        this.g = Math.round(150 + ratio * 60);
-        this.b = 255;
-      }
+  // footer bars
+  const maxFC=Math.max(stayC,passC,1);
+  $('sfStay').textContent=stayC.toLocaleString()+' pax';
+  $('sfPass').textContent=passC.toLocaleString()+' pax';
+  setTimeout(()=>{
+    $('sfStayBar').style.width=Math.round(stayC/maxFC*100)+'%';
+    $('sfPassBar').style.width=Math.round(passC/maxFC*100)+'%';
+  },120);
+}
 
-      // サイズ：来訪者数比例（2〜7px）
-      this.coreSize  = 2 + ratio * 5;
-      // ベジェ曲率方向（左右でオフセット）
-      this.curveSide = s.random() > 0.5 ? 1 : -1;
-      // 微細な速度ゆらぎ
-      this.jitter = s.random(-0.0005, 0.0005);
+// LEAFLET
+const leafletMap=L.map('map',{center:[34.7617,137.3870],zoom:17});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors'}).addTo(leafletMap);
+
+const dc=L.control({position:'topright'});
+dc.onAdd=function(){
+  const d=L.DomUtil.create('div');
+  d.innerHTML=`<div style="background:rgba(10,14,26,.95);border:1px solid rgba(255,100,100,.3);border-radius:6px;padding:7px 10px;display:flex;gap:7px;align-items:center;">
+    <input type="date" id="datePicker" style="background:#111;border:1px solid rgba(255,100,100,.3);color:#e0e6f0;border-radius:4px;padding:4px 8px;font-size:12px;cursor:pointer;font-family:monospace;">
+    <button id="reloadBtn" style="background:#ff6464;border:none;color:#fff;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:700;letter-spacing:.05em;">GO</button>
+  </div>`;
+  L.DomEvent.disableClickPropagation(d);
+  return d;
+};
+dc.addTo(leafletMap);
+
+// p5.js
+let needsClear=false;
+leafletMap.on('movestart zoomstart',()=>{needsClear=true;});
+leafletMap.on('moveend  zoomend',  ()=>{needsClear=false;});
+
+new p5(function(s){
+  let particles=[];
+
+  class Particle{
+    constructor(flow){
+      this.flow=flow; this.t=s.random(0,.05); this.speed=s.random(.004,.011); this.alive=true;
+      this.side=s.random()>.5?1:-1;
+      const r=maxCount>minCount?(flow.count-minCount)/(maxCount-minCount):1;
+      if(isStaying(flow.distance)){this.r=255;this.g=Math.round(130-r*90);this.b=Math.round(60-r*50);}
+      else{this.r=Math.round(50+r*80);this.g=Math.round(150+r*60);this.b=255;}
+      this.sz=2+r*5; this.jit=s.random(-.0004,.0004);
     }
-
-    // 現在位置（ベジェ補間）
-    getPos() {
-      const fLoc = locations[this.flow.from];
-      const tLoc = locations[this.flow.to];
-      if (!fLoc || !tLoc) return null;
-
-      const fp = leafletMap.latLngToContainerPoint([fLoc.lat, fLoc.lng]);
-      const tp = leafletMap.latLngToContainerPoint([tLoc.lat, tLoc.lng]);
-      const fx = fp.x, fy = fp.y, tx = tp.x, ty = tp.y;
-
-      const dx = tx - fx, dy = ty - fy;
-      const len = Math.sqrt(dx*dx + dy*dy);
-      if (len < 1) return { x:fx, y:fy };
-
-      // 中点から垂直方向に逸らした制御点
-      const curv = len * 0.12 * this.curveSide;
-      const cx = (fx+tx)/2 - (dy/len) * curv;
-      const cy = (fy+ty)/2 + (dx/len) * curv;
-
-      const t = this.t;
-      return {
-        x: (1-t)*(1-t)*fx + 2*(1-t)*t*cx + t*t*tx,
-        y: (1-t)*(1-t)*fy + 2*(1-t)*t*cy + t*t*ty,
-      };
+    pos(){
+      const fL=locations[this.flow.from],tL=locations[this.flow.to]; if(!fL||!tL)return null;
+      const fp=leafletMap.latLngToContainerPoint([fL.lat,fL.lng]);
+      const tp=leafletMap.latLngToContainerPoint([tL.lat,tL.lng]);
+      const dx=tp.x-fp.x,dy=tp.y-fp.y,len=Math.sqrt(dx*dx+dy*dy);
+      if(len<1)return{x:fp.x,y:fp.y};
+      const cv=len*.13*this.side;
+      const cx=(fp.x+tp.x)/2-(dy/len)*cv, cy=(fp.y+tp.y)/2+(dx/len)*cv;
+      const t=this.t;
+      return{x:(1-t)*(1-t)*fp.x+2*(1-t)*t*cx+t*t*tp.x, y:(1-t)*(1-t)*fp.y+2*(1-t)*t*cy+t*t*tp.y};
     }
-
-    update() {
-      this.t += this.speed + this.jitter;
-      if (this.t >= 1.0) this.alive = false;
-    }
-
-    draw() {
-      const pos = this.getPos();
-      if (!pos) return;
-
-      // フェードイン・アウト（両端 12% をイーズ）
-      const ez = 0.12;
-      const alpha = this.t < ez          ? this.t / ez
-                  : this.t > (1 - ez)    ? (1 - this.t) / ez
-                  : 1.0;
-
-      const a = Math.round(alpha * 255);
-      const ctx = s.drawingContext;
-
-      // グロー
-      ctx.shadowBlur  = 20;
-      ctx.shadowColor = `rgba(${this.r},${this.g},${this.b},${(alpha * 0.85).toFixed(2)})`;
-
+    update(){this.t+=this.speed+this.jit; if(this.t>=1)this.alive=false;}
+    draw(){
+      const p=this.pos(); if(!p)return;
+      const ez=.12, al=this.t<ez?this.t/ez:this.t>1-ez?(1-this.t)/ez:1;
+      const a=Math.round(al*255);
+      const ctx=s.drawingContext;
+      ctx.shadowBlur=22; ctx.shadowColor=`rgba(${this.r},${this.g},${this.b},${(al*.88).toFixed(2)})`;
       s.noStroke();
-
-      // ホワイトコア（輝点）
-      s.fill(255, 255, 255, a);
-      s.circle(pos.x, pos.y, this.coreSize);
-
-      // カラーハロー
-      s.fill(this.r, this.g, this.b, Math.round(alpha * 170));
-      s.circle(pos.x, pos.y, this.coreSize * 2.8);
-
-      // ソフトグロー
-      s.fill(this.r, this.g, this.b, Math.round(alpha * 45));
-      s.circle(pos.x, pos.y, this.coreSize * 6);
-
-      ctx.shadowBlur = 0;
+      s.fill(255,255,255,a);                            s.circle(p.x,p.y,this.sz);
+      s.fill(this.r,this.g,this.b,Math.round(al*170));  s.circle(p.x,p.y,this.sz*2.8);
+      s.fill(this.r,this.g,this.b,Math.round(al*40));   s.circle(p.x,p.y,this.sz*6.5);
+      ctx.shadowBlur=0;
     }
   }
 
-  // --------------------------------------------------
-  // ノード：拡散リング
-  // --------------------------------------------------
-  function drawNodeRings() {
-    const now = s.millis() / 1000;
-
-    Object.entries(locations).forEach(([name, pos]) => {
-      const px   = leafletMap.latLngToContainerPoint([pos.lat, pos.lng]);
-      const pres  = presence[name] || { count:0 };
-      const ratio = presenceMax > 0 ? pres.count / presenceMax : 0;
-      if (ratio < 0.01) return;
-
-      // リング色（グレー→濃青）
-      const br = Math.round(100 - ratio * 100);
-      const bg = Math.round(100 - ratio * 60);
-      const bb = Math.round(120 + ratio * 135);
-
-      s.noFill();
-      s.strokeWeight(1.4);
-
-      for (let i = 0; i < 3; i++) {
-        const phase  = ((now * 0.55) + i / 3) % 1;
-        const maxRad = 18 + ratio * 24;
-        const rad    = phase * maxRad;
-        const alpha  = (1 - phase) * 160 * ratio;
-
-        s.stroke(br, bg, bb, alpha);
-        s.circle(px.x, px.y, rad * 2);
+  function drawRings(){
+    const now=s.millis()/1000;
+    Object.entries(locations).forEach(([name,pos])=>{
+      const px=leafletMap.latLngToContainerPoint([pos.lat,pos.lng]);
+      const pr=presence[name]||{count:0};
+      const ratio=presenceMax>0?pr.count/presenceMax:0; if(ratio<.01)return;
+      const br=Math.round(100-ratio*100),bg=Math.round(100-ratio*60),bb=Math.round(120+ratio*135);
+      s.noFill(); s.strokeWeight(1.2);
+      for(let i=0;i<3;i++){
+        const ph=((now*.55)+i/3)%1;
+        s.stroke(br,bg,bb,(1-ph)*150*ratio);
+        s.circle(px.x,px.y,ph*(18+ratio*26)*2);
       }
-      s.strokeWeight(1);
+      s.strokeWeight(1); s.noStroke();
+    });
+  }
+
+  function drawNodeStats(){
+    s.textFont('monospace');
+    Object.entries(locations).forEach(([name,pos])=>{
+      const pr=presence[name]; if(!pr||pr.count===0)return;
+      const px=leafletMap.latLngToContainerPoint([pos.lat,pos.lng]);
+      const ratio=presenceMax>0?pr.count/presenceMax:0;
+      const sz=Math.round(28+ratio*24), ox=sz/2+7;
       s.noStroke();
-    });
-  }
-
-  // --------------------------------------------------
-  // ビネット（周辺光量落ち）
-  // --------------------------------------------------
-  function drawVignette() {
-    const ctx = s.drawingContext;
-    const g = ctx.createRadialGradient(
-      s.width/2, s.height/2, s.height * 0.22,
-      s.width/2, s.height/2, s.height * 0.88
-    );
-    g.addColorStop(0, 'rgba(10,14,26,0)');
-    g.addColorStop(1, 'rgba(10,14,26,0.72)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, s.width, s.height);
-  }
-
-  // --------------------------------------------------
-  // フレームカウンタ（FPS表示用、必要に応じて活用）
-  // --------------------------------------------------
-  // let fps = 60;
-
-  // --------------------------------------------------
-  // setup / draw
-  // --------------------------------------------------
-  s.setup = function() {
-    const wrap = document.getElementById('map-wrap');
-    const cnv  = s.createCanvas(wrap.offsetWidth, wrap.offsetHeight);
-    cnv.parent('map-wrap');
-    cnv.elt.style.position      = 'absolute';
-    cnv.elt.style.top           = '0';
-    cnv.elt.style.left          = '0';
-    cnv.elt.style.pointerEvents = 'none';
-    cnv.elt.style.zIndex        = '649';
-    s.frameRate(60);
-    s.colorMode(s.RGB, 255);
-  };
-
-  s.draw = function() {
-    if (!dataReady) { s.clear(); return; }
-
-    // 地図パン中：粒子消去＆クリア描画
-    if (needsClear) {
-      particles = [];
-      s.clear();
-      drawNodeRings();
-      drawVignette();
-      return;
-    }
-
-    // ===== モーションブラー =====
-    // 毎フレーム半透明の暗幕をかぶせ、前フレームの軌跡を残す
-    s.noStroke();
-    s.fill(10, 14, 26, 28);
-    s.rect(0, 0, s.width, s.height);
-
-    // ===== パーティクル生成 =====
-    flows.forEach(flow => {
-      if (!isVisible(flow)) return;
-      const ratio = maxCount > 1 ? (flow.count - minCount) / (maxCount - minCount) : 1;
-      // spawn確率：min=0.015 / max=0.28（フレームあたり）
-      if (s.random() < 0.015 + ratio * 0.265) {
-        particles.push(new Particle(flow));
+      // visitor count badge
+      s.fill(10,14,26,200); s.rect(px.x+ox,px.y-11,54,18,4);
+      s.fill(200,220,255,220); s.textSize(9); s.textAlign(s.LEFT,s.CENTER);
+      s.text(pr.count.toLocaleString()+' pax',px.x+ox+4,px.y-2);
+      // dwell badge
+      if(pr.avg_dwell>0){
+        s.fill(10,14,26,185); s.rect(px.x+ox,px.y+5,54,16,4);
+        s.fill(100,200,130,210); s.textSize(9);
+        s.text(pr.avg_dwell+'min avg',px.x+ox+4,px.y+13);
       }
     });
+  }
 
-    // 上限：600粒子（パフォーマンス保護）
-    if (particles.length > 600) particles.splice(0, particles.length - 600);
+  function drawVignette(){
+    const ctx=s.drawingContext;
+    const g=ctx.createRadialGradient(s.width/2,s.height/2,s.height*.22,s.width/2,s.height/2,s.height*.88);
+    g.addColorStop(0,'rgba(10,14,26,0)'); g.addColorStop(1,'rgba(10,14,26,.7)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,s.width,s.height);
+  }
 
-    // ===== 更新・描画 =====
-    particles = particles.filter(p => {
-      p.update();
-      if (p.alive) p.draw();
-      return p.alive;
+  s.setup=function(){
+    const w=document.getElementById('map-wrap');
+    const c=s.createCanvas(w.offsetWidth,w.offsetHeight);
+    c.parent('map-wrap');
+    Object.assign(c.elt.style,{position:'absolute',top:'0',left:'0',pointerEvents:'none',zIndex:'649'});
+    s.frameRate(60); s.colorMode(s.RGB,255);
+  };
+
+  s.draw=function(){
+    if(!dataReady){s.clear();return;}
+    if(needsClear){particles=[];s.clear();drawRings();drawNodeStats();drawVignette();return;}
+    s.noStroke(); s.fill(10,14,26,28); s.rect(0,0,s.width,s.height);
+    flows.forEach(flow=>{
+      if(!isVisible(flow))return;
+      const r=maxCount>1?(flow.count-minCount)/(maxCount-minCount):1;
+      if(s.random()<.015+r*.265)particles.push(new Particle(flow));
     });
-
-    // ===== ノードリング =====
-    drawNodeRings();
-
-    // ===== ビネット =====
-    drawVignette();
+    if(particles.length>650)particles.splice(0,particles.length-650);
+    particles=particles.filter(p=>{p.update();if(p.alive)p.draw();return p.alive;});
+    drawRings(); drawNodeStats(); drawVignette();
   };
 
-  s.windowResized = function() {
-    const wrap = document.getElementById('map-wrap');
-    s.resizeCanvas(wrap.offsetWidth, wrap.offsetHeight);
-    particles = [];
+  s.windowResized=function(){
+    const w=document.getElementById('map-wrap');
+    s.resizeCanvas(w.offsetWidth,w.offsetHeight); particles=[];
   };
 
-  // 外部からアクセス可能にする（将来の動画録画等で使用）
-  window.p5sketch = s;
-  window.getParticles = () => particles;
+  window.p5sketch=s;
 });
 
-// =====================================================
-// マーカー & サイドバー初期化
-// =====================================================
-function clearMapData() {
-  leafletMarkers.forEach(m => leafletMap.removeLayer(m));
-  leafletMarkers.length = 0;
-  document.getElementById('flowList').innerHTML = '';
-  sideItems.length = 0;
-  sortedFlows.length = 0;
+// MAP INIT
+function clearMapData(){
+  leafletMarkers.forEach(m=>leafletMap.removeLayer(m));
+  leafletMarkers.length=sideItems.length=sortedFlows.length=0;
+  $('flowList').innerHTML='';
 }
 
-function initMap() {
-  clearMapData();
-
-  // 拠点ごとの in/out 集計
-  const locationStats = {};
-  flows.forEach(f => {
-    if (!locationStats[f.from]) locationStats[f.from] = { out:0, in:0 };
-    if (!locationStats[f.to])   locationStats[f.to]   = { out:0, in:0 };
-    locationStats[f.from].out += f.count;
-    locationStats[f.to].in   += f.count;
+function initMap(){
+  clearMapData(); updateStats();
+  const ls={};
+  flows.forEach(f=>{
+    if(!ls[f.from])ls[f.from]={out:0,in:0}; if(!ls[f.to])ls[f.to]={out:0,in:0};
+    ls[f.from].out+=f.count; ls[f.to].in+=f.count;
   });
 
-  // ----- Leafletマーカー -----
-  Object.entries(locations).forEach(([name, pos]) => {
-    const isHito   = name === 'ひとなる図書館';
-    const label    = isHito ? 'ひと' : name.replace('棟','');
-    const stats    = locationStats[name] || { out:0, in:0 };
-    const pres     = presence[name] || { count:0, avg_dwell:0 };
-    const ratio    = presenceMax > 0 ? pres.count / presenceMax : 0;
-
-    // サイズ（28〜52px）
-    const sz = Math.round(28 + ratio * 24);
-    // 枠色（グレー→濃青）
-    const br = Math.round(100 - ratio * 100);
-    const bg = Math.round(100 - ratio * 60);
-    const bb = Math.round(120 + ratio * 135);
-    const borderColor = pres.count === 0 ? '#555566' : `rgb(${br},${bg},${bb})`;
-    const fs = isHito ? Math.max(7, sz*0.28) : Math.max(10, sz*0.34);
-
-    const icon = L.divIcon({
-      html:`<div class="custom-marker" style="
-        width:${sz}px;height:${sz}px;font-size:${fs}px;
-        border-color:${borderColor};
-        box-shadow:0 0 16px ${borderColor}99,0 0 4px ${borderColor};
-      ">${label}</div>`,
-      iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], className:'',
+  Object.entries(locations).forEach(([name,pos])=>{
+    const pr=presence[name]||{count:0,avg_dwell:0};
+    const st=ls[name]||{out:0,in:0};
+    const ratio=presenceMax>0?pr.count/presenceMax:0;
+    const sz=Math.round(28+ratio*24);
+    const br=Math.round(100-ratio*100),bg=Math.round(100-ratio*60),bb=Math.round(120+ratio*135);
+    const bc=pr.count===0?'#555566':`rgb(${br},${bg},${bb})`;
+    const lbl=name.replace('棟','').replace('ひとなる図書館','Lib');
+    const icon=L.divIcon({
+      html:`<div class="custom-marker" style="width:${sz}px;height:${sz}px;font-size:${Math.max(9,sz*.33)}px;border-color:${bc};box-shadow:0 0 16px ${bc}99,0 0 4px ${bc};">${lbl}</div>`,
+      iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],className:'',
     });
-
-    const m = L.marker([pos.lat,pos.lng], { icon, pane:'tooltipPane' })
-      .addTo(leafletMap)
-      .bindPopup(`
-        <div class="popup-title">${name}</div>
-        <div class="popup-row">来訪者数　<span>${pres.count.toLocaleString()}人</span></div>
-        <div class="popup-row">平均滞在　<span>${pres.avg_dwell}分</span></div>
-        <div class="popup-row">出発（→）<span>${stats.out.toLocaleString()}人</span></div>
-        <div class="popup-row">到着（←）<span>${stats.in.toLocaleString()}人</span></div>
-        <div class="popup-row">動線合計　<span>${(stats.out+stats.in).toLocaleString()}人</span></div>`);
+    const spct=(st.out+st.in)>0?Math.round(pr.count/(st.out+st.in+pr.count)*100):0;
+    const m=L.marker([pos.lat,pos.lng],{icon,pane:'tooltipPane'}).addTo(leafletMap).bindPopup(`
+      <div class="popup-title">${name}</div>
+      <div class="popup-row">Visitors detected<span>${pr.count.toLocaleString()} pax</span></div>
+      <div class="popup-row">Avg dwell time<span>${pr.avg_dwell} min</span></div>
+      <div class="popup-row">Outbound<span>${st.out.toLocaleString()} pax</span></div>
+      <div class="popup-row">Inbound<span>${st.in.toLocaleString()} pax</span></div>
+      <div class="popup-row">Total flow<span>${(st.out+st.in).toLocaleString()} pax</span></div>
+      <div class="popup-bbg"><div class="popup-bar" style="width:${spct}%;background:linear-gradient(to right,#ff8888,#ff3333);"></div></div>
+      <div style="font-size:9px;color:#4a5568;margin-top:3px;">presence share: ${spct}%</div>`);
     leafletMarkers.push(m);
   });
 
-  // ----- サイドバー -----
-  const sorted = [...flows].sort((a,b) => b.count - a.count);
-  sorted.forEach(flow => sortedFlows.push(flow));
+  const sorted=[...flows].sort((a,b)=>b.count-a.count);
+  sorted.forEach(f=>sortedFlows.push(f));
+  $('sbCnt').textContent=sorted.length+' routes';
 
-  const flowList = document.getElementById('flowList');
-  sorted.forEach((flow) => {
-    const pct     = maxCount > minCount ? Math.round((flow.count-minCount)/(maxCount-minCount)*100) : 100;
-    const staying = isStaying(flow.distance);
-    const color   = heatColor(flow.count, 1);
-
-    const item = document.createElement('div');
-    item.className = 'flow-item';
-    item.innerHTML = `
-      <div class="flow-swatch" style="background:${color};box-shadow:0 0 5px ${color};"></div>
-      <div class="flow-bar-wrap">
+  const fl=$('flowList');
+  sorted.forEach((flow,rank)=>{
+    const pct=maxCount>minCount?Math.round((flow.count-minCount)/(maxCount-minCount)*100):100;
+    const st=isStaying(flow.distance);
+    const c=heatColor(flow.count,1);
+    const rc=rank===0?'r1':rank===1?'r2':rank===2?'r3':'';
+    const item=document.createElement('div');
+    item.className='flow-item';
+    item.innerHTML=`
+      <div class="flow-rank ${rc}">${rank+1}</div>
+      <div class="flow-swatch" style="background:${c};box-shadow:0 0 5px ${c};"></div>
+      <div class="flow-bwrap">
         <div class="flow-route">${flow.from} → ${flow.to}</div>
-        <div class="flow-meta">${flow.distance}m ｜ ${staying?'立ち寄り':'素通り'}</div>
-        <div class="flow-bar-bg"><div class="flow-bar" style="width:${pct}%;background:${color};"></div></div>
+        <div class="flow-meta"><span>${flow.distance}m</span><span>${st?'🟠 Staying':'🔵 Passing'}</span></div>
+        <div class="flow-bbg"><div class="flow-bar" style="width:0%;background:${c};"></div></div>
       </div>
-      <div class="flow-count" style="color:${color};">${flow.count}</div>`;
-
-    item.addEventListener('click', () => {
-      sideItems.forEach(el => el.classList.remove('active'));
-      item.classList.add('active');
-      const fLoc = locations[flow.from], tLoc = locations[flow.to];
-      if (fLoc && tLoc) {
-        leafletMap.fitBounds(
-          [[fLoc.lat,fLoc.lng],[tLoc.lat,tLoc.lng]],
-          { padding:[100,100] }
-        );
-      }
+      <div class="flow-cnt" style="color:${c};">${flow.count.toLocaleString()}</div>`;
+    setTimeout(()=>item.querySelector('.flow-bar').style.width=pct+'%', 60*(rank+1));
+    item.addEventListener('click',()=>{
+      sideItems.forEach(e=>e.classList.remove('active')); item.classList.add('active');
+      const fL=locations[flow.from],tL=locations[flow.to];
+      if(fL&&tL)leafletMap.fitBounds([[fL.lat,fL.lng],[tL.lat,tL.lng]],{padding:[100,100]});
     });
-
-    flowList.appendChild(item);
-    sideItems.push(item);
+    fl.appendChild(item); sideItems.push(item);
   });
 
   updateSidebarColors(currentMode);
 }
 
-function updateSidebarColors(mode) {
-  const vf = sortedFlows.filter(f => {
-    const st = isStaying(f.distance);
-    return mode==='all' || (mode==='passing'&&!st) || (mode==='staying'&&st);
-  });
-  const mx = vf.length ? Math.max(...vf.map(f=>f.count)) : maxCount;
-  const mn = vf.length ? Math.min(...vf.map(f=>f.count)) : minCount;
-
-  sideItems.forEach((item, i) => {
-    const f  = sortedFlows[i];
-    if (!f) return;
-    const st      = isStaying(f.distance);
-    const visible = mode==='all' || (mode==='passing'&&!st) || (mode==='staying'&&st);
-    const c       = heatColor(f.count, 1, mn, mx);
-    item.querySelector('.flow-swatch').style.background = c;
-    item.querySelector('.flow-swatch').style.boxShadow  = `0 0 5px ${c}`;
-    item.querySelector('.flow-bar').style.background    = c;
-    item.querySelector('.flow-count').style.color       = c;
-    item.classList.toggle('hidden', !visible);
+function updateSidebarColors(mode){
+  const vf=sortedFlows.filter(f=>{const st=isStaying(f.distance);return mode==='all'||(mode==='passing'&&!st)||(mode==='staying'&&st);});
+  const mx=vf.length?Math.max(...vf.map(f=>f.count)):maxCount;
+  const mn=vf.length?Math.min(...vf.map(f=>f.count)):minCount;
+  sideItems.forEach((item,i)=>{
+    const f=sortedFlows[i]; if(!f)return;
+    const st=isStaying(f.distance);
+    const vis=mode==='all'||(mode==='passing'&&!st)||(mode==='staying'&&st);
+    const c=heatColor(f.count,1,mn,mx);
+    item.querySelector('.flow-swatch').style.cssText=`background:${c};box-shadow:0 0 5px ${c};`;
+    item.querySelector('.flow-bar').style.background=c;
+    item.querySelector('.flow-cnt').style.color=c;
+    item.classList.toggle('hidden',!vis);
   });
 }
 
-// =====================================================
-// トグルボタン
-// =====================================================
-document.querySelectorAll('.toggle-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+document.querySelectorAll('.toggle-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    currentMode = btn.dataset.mode;
+    currentMode=btn.dataset.mode;
     updateSidebarColors(currentMode);
   });
 });
 
-// =====================================================
-// 起動
-// =====================================================
-leafletMap.whenReady(async () => {
-  const jst     = new Date(Date.now() + 9*60*60*1000);
-  const dateStr = jst.toISOString().slice(0,10);
-  document.getElementById('datePicker').value = dateStr;
-
-  await fetchData(dateStr);
+leafletMap.whenReady(async()=>{
+  const jst=new Date(Date.now()+9*60*60*1000);
+  const d=jst.toISOString().slice(0,10);
+  $('datePicker').value=d;
+  await fetchData(d);
   initMap();
-
-  document.getElementById('reloadBtn').addEventListener('click', async () => {
-    const d = document.getElementById('datePicker').value;
-    await fetchData(d);
-    initMap();
+  $('reloadBtn').addEventListener('click',async()=>{
+    await fetchData($('datePicker').value); initMap();
   });
 });
 </script>
