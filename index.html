@@ -517,17 +517,19 @@ new p5(function(s){
       const pr=presence[name]; if(!pr||pr.count===0)return;
       const px=leafletMap.latLngToContainerPoint([pos.lat,pos.lng]);
       const ratio=presenceMax>0?pr.count/presenceMax:0;
-      const sz=Math.round(28+ratio*24), ox=sz/2+7;
+      const sz=Math.round(28+ratio*24);
+      const ox=sz/2+4;   // 右下へ
+      const oy=sz/2+4;
       s.noStroke();
       // visitor count badge
-      s.fill(10,14,26,200); s.rect(px.x+ox,px.y-11,54,18,4);
+      s.fill(10,14,26,200); s.rect(px.x+ox,px.y+oy,54,18,4);
       s.fill(200,220,255,220); s.textSize(9); s.textAlign(s.LEFT,s.CENTER);
-      s.text(pr.count.toLocaleString()+' pax',px.x+ox+4,px.y-2);
+      s.text(pr.count.toLocaleString()+' pax',px.x+ox+4,px.y+oy+9);
       // dwell badge
       if(pr.avg_dwell>0){
-        s.fill(10,14,26,185); s.rect(px.x+ox,px.y+5,54,16,4);
+        s.fill(10,14,26,185); s.rect(px.x+ox,px.y+oy+18,54,16,4);
         s.fill(100,200,130,210); s.textSize(9);
-        s.text(pr.avg_dwell+'min avg',px.x+ox+4,px.y+13);
+        s.text(pr.avg_dwell+'min avg',px.x+ox+4,px.y+oy+26);
       }
     });
   }
