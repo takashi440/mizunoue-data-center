@@ -374,13 +374,14 @@ async function fetchData(date){
     presence={};
     (json.presence||[]).forEach(p=>{presence[p.loc_id]={count:parseInt(p.count),avg_dwell:parseFloat(p.avg_dwell)};});
     presenceMax=Math.max(...Object.values(presence).map(p=>p.count),1);
+    window._totalVisitors=parseInt(json.total)||0;
     $('dateBadge').textContent=json.date;
     hide(); dataReady=true; return true;
   }catch(e){ show('❌ Load failed: '+e.message); return false; }
 }
 
 function updateStats(){
-  const totalV=Object.values(presence).reduce((s,p)=>s+p.count,0);
+  const totalV=window._totalVisitors||Object.values(presence).reduce((s,p)=>s+p.count,0);
   const stayF=flows.filter(f=>isStaying(f.distance));
   const passF=flows.filter(f=>!isStaying(f.distance));
   const stayC=stayF.reduce((s,f)=>s+f.count,0);
