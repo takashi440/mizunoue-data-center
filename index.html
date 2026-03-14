@@ -318,11 +318,12 @@ new p5(function(s){
 
   class Particle{
     constructor(flow){
-      this.flow=flow; this.t=s.random(0,.05); this.speed=s.random(.004,.011); this.alive=true;
+      this.flow=flow; this.t=s.random(0,.05); this.alive=true;
       this.side=s.random()>.5?1:-1;
       const r=maxCount>minCount?(flow.count-minCount)/(maxCount-minCount):1;
       if(isStaying(flow.distance)){this.r=255;this.g=Math.round(130-r*90);this.b=Math.round(60-r*50);}
       else{this.r=Math.round(50+r*80);this.g=Math.round(150+r*60);this.b=255;}
+      this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
       this.sz=2+r*5; this.jit=s.random(-.0004,.0004);
     }
     pos(){
