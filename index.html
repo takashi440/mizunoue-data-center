@@ -231,7 +231,7 @@ header {
       <div class="leg-row"><div class="leg-dot" id="leg-stay-dot" style="background:radial-gradient(#ffaa60,#ff3030);box-shadow:0 0 5px #ff6040;"></div>Staying ≥150m</div>
       <div class="leg-row" style="flex-direction:column;align-items:flex-start;gap:3px;">
         <span style="font-size:9px;color:var(--sub);">Passing &lt;150m · temperature</span>
-        <div style="width:100%;height:6px;border-radius:3px;background:linear-gradient(to right,#0096ff,#00dcc8,#50dc50,#ffdc00,#ff5000);"></div>
+        <div style="width:100%;height:6px;border-radius:3px;background:linear-gradient(to right,#a0d8ff,#00e5ff,#00e0c0,#00e060,#aaee00);"></div>
         <div style="display:flex;justify-content:space-between;width:100%;font-size:8px;color:var(--mut);"><span>−5°C</span><span>10°C</span><span>20°C</span><span>35°C</span></div>
       </div>
       <div style="font-size:9px;color:#4a5568;margin-top:5px;line-height:1.8;">Node size = visitor count<br>Ring pulse = presence intensity</div>
@@ -273,17 +273,18 @@ function wmoToPalette(code){
 
 // palette → [stayColor, passColor] 関数
 function paletteColor(palette, r, staying){
-  // r = 0〜1 (来訪者数比率)
-  const P={
-    sunny:  {stay:[255,Math.round(210-r*80),Math.round(20-r*15)],  pass:[Math.round(20+r*60),Math.round(200+r*55),255]},
-    cloudy: {stay:[255,Math.round(130-r*90),Math.round(60-r*50)],  pass:[Math.round(50+r*80),Math.round(150+r*60),255]},
-    fog:    {stay:[Math.round(160-r*40),Math.round(120-r*30),Math.round(200+r*40)], pass:[Math.round(80+r*40),Math.round(140+r*30),Math.round(180+r*60)]},
-    rain:   {stay:[Math.round(120-r*40),Math.round(60-r*30),255],  pass:[Math.round(20+r*30),Math.round(120+r*40),Math.round(200+r*40)]},
-    snow:   {stay:[Math.round(180+r*60),Math.round(210+r*40),255], pass:[Math.round(100+r*80),Math.round(180+r*60),255]},
-    shower: {stay:[Math.round(160-r*40),Math.round(80-r*40),255],  pass:[Math.round(20+r*20),Math.round(160+r*50),Math.round(180+r*60)]},
-    storm:  {stay:[Math.round(180+r*60),Math.round(20+r*60),255],  pass:[Math.round(20+r*20),Math.round(80+r*40),Math.round(220+r*35)]},
+  // Staying = 暖色系のみ（赤・橙・黄・ピンク・マゼンタ）
+  // Passing = 寒色系のみ（シアン・緑・ティール）→ tempColorで使用
+  const WARM={
+    sunny:  [255, Math.round(200-r*60), Math.round(10+r*20)],   // 黄橙〜橙
+    cloudy: [255, Math.round(110-r*60), Math.round(40-r*30)],   // 赤橙
+    fog:    [Math.round(220+r*35), Math.round(80-r*40), Math.round(140+r*40)], // ローズ〜マゼンタ
+    rain:   [Math.round(200-r*60), Math.round(20+r*20), Math.round(80+r*60)],  // 深紅〜クリムゾン
+    snow:   [Math.round(240+r*15), Math.round(160+r*60), Math.round(180+r*60)],// ピンク〜ラベンダーピンク
+    shower: [255, Math.round(60-r*40), Math.round(120+r*60)],   // 赤ピンク〜マゼンタ
+    storm:  [Math.round(180-r*60), Math.round(0+r*20), Math.round(60+r*40)],   // バーガンディ〜ディープレッド
   };
-  const c=(P[palette]||P.cloudy)[staying?'stay':'pass'];
+  const c=(WARM[palette]||WARM.cloudy);
   return{r:c[0],g:c[1],b:c[2]};
 }
 
@@ -359,7 +360,7 @@ function animCount(el,target,dur=900){
 async function fetchData(date){
   show('Loading data...'); dataReady=false;
   try{
-    const res=await fetch(`${GAS_API_URL}?date=${date}`);
+    const res=await fetch(`${GAS_API_URL}?date=${date}&t=${Date.now()}`);
     const json=await res.json();
     if(json.error) throw new Error(json.error);
     locations={};
@@ -451,14 +452,14 @@ new p5(function(s){
         const wc=paletteColor(weather.palette,r,true);
         this.r=wc.r; this.g=wc.g; this.b=wc.b;
       } else {
-        // Passing → 気温で色が変わる（-5°C=青白 〜 35°C=赤橙）
-        const t=weather.temp!==null ? Math.max(0,Math.min(1,(weather.temp+5)/40)) : 0.5;
-        // 寒:青(0,150,255) → 涼:水(0,220,200) → 常:緑(80,220,80) → 暖:黄(255,220,0) → 熱:赤橙(255,80,0)
+        // Passing → 気温で色が変わる（寒色系のみ）
+        // -5°C=氷青白 → 10°C=シアン → 20°C=ティール → 28°C=緑 → 35°C=黄緑
+        const t=weather.temp!==null ? Math.max(0,Math.min(1,(weather.temp+5)/40)) : 0.4;
         let cr,cg,cb;
-        if(t<0.25){      const u=t/0.25;    cr=Math.round(u*80);         cg=Math.round(150+u*70); cb=255; }
-        else if(t<0.5){  const u=(t-.25)/.25; cr=Math.round(80+u*175);   cg=Math.round(220);      cb=Math.round(255-u*255); }
-        else if(t<0.75){ const u=(t-.5)/.25;  cr=255;                    cg=Math.round(220-u*140); cb=0; }
-        else{            const u=(t-.75)/.25;  cr=255;                    cg=Math.round(80-u*60);  cb=0; }
+        if(t<0.25){      const u=t/0.25;      cr=Math.round(u*20);            cg=Math.round(200+u*55);  cb=255; }           // 氷青白→シアン
+        else if(t<0.5){  const u=(t-.25)/.25; cr=Math.round(20+u*10);         cg=Math.round(255);       cb=Math.round(255-u*100); } // シアン→ティール
+        else if(t<0.75){ const u=(t-.5)/.25;  cr=Math.round(30+u*50);         cg=Math.round(255);       cb=Math.round(155-u*100); } // ティール→緑
+        else{            const u=(t-.75)/.25;  cr=Math.round(80+u*120);        cg=Math.round(255-u*40);  cb=Math.round(55-u*40); }   // 緑→黄緑
         this.r=cr; this.g=cg; this.b=cb;
       }
       this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
