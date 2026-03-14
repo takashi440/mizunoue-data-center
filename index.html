@@ -102,7 +102,7 @@ header {
 
 /* LEAFLET */
 .leaflet-tile { filter:invert(1) hue-rotate(180deg) brightness(.55) saturate(.4); }
-.leaflet-top.leaflet-left { top:210px; left:14px; }
+.leaflet-top.leaflet-left { top:170px; left:14px; }
 
 /* DRAWER TOGGLE (mobile only) */
 #drawer-btn {
@@ -199,6 +199,7 @@ header {
     <button class="toggle-btn" data-mode="passing">Passing <small style="opacity:.55">&lt;150m</small></button>
     <button class="toggle-btn" data-mode="staying">Staying <small style="opacity:.55">≥150m</small></button>
   </div>
+  <div class="date-badge" id="weatherBadge" style="min-width:120px;text-align:center;">☁️ —</div>
   <div class="date-badge" id="dateBadge">—</div>
 </header>
 
@@ -227,8 +228,8 @@ header {
 
     <!-- Legend -->
     <div class="map-panel" id="panel-leg">
-      <div class="leg-row"><div class="leg-dot" style="background:radial-gradient(#ffaa60,#ff3030);box-shadow:0 0 5px #ff6040;"></div>Staying ≥150m</div>
-      <div class="leg-row"><div class="leg-dot" style="background:radial-gradient(#88ddff,#4488ff);box-shadow:0 0 5px #66aaff;"></div>Passing &lt;150m</div>
+      <div class="leg-row"><div class="leg-dot" id="leg-stay-dot" style="background:radial-gradient(#ffaa60,#ff3030);box-shadow:0 0 5px #ff6040;"></div>Staying ≥150m</div>
+      <div class="leg-row"><div class="leg-dot" id="leg-pass-dot" style="background:radial-gradient(#88ddff,#4488ff);box-shadow:0 0 5px #66aaff;"></div>Passing &lt;150m</div>
       <div style="font-size:9px;color:#4a5568;margin-top:5px;line-height:1.8;">Node size = visitor count<br>Ring pulse = presence intensity</div>
     </div>
   </div>
@@ -250,6 +251,64 @@ header {
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx044_Lz32U4iWo3dvQ1-7wp-OY8SQqf_DjgIhw_XtjRcof2JLW83JdRz1c9Xw6YZ81/exec';
 
 let locations={}, flows=[], maxCount=1, minCount=0, presence={}, presenceMax=1;
+
+// ── WEATHER ──────────────────────────────────
+let weather={code:null,temp:null,label:'',emoji:'☁️',palette:'cloudy'};
+
+// WMO code → palette
+function wmoToPalette(code){
+  if(code===0||code===1)           return{palette:'sunny',  emoji:'☀️',  label:'Clear'};
+  if(code===2||code===3)           return{palette:'cloudy', emoji:'☁️',  label:'Cloudy'};
+  if(code>=45&&code<=48)           return{palette:'fog',    emoji:'🌫️', label:'Foggy'};
+  if(code>=51&&code<=67)           return{palette:'rain',   emoji:'🌧️', label:'Rainy'};
+  if(code>=71&&code<=77)           return{palette:'snow',   emoji:'🌨️', label:'Snowy'};
+  if(code>=80&&code<=82)           return{palette:'shower', emoji:'🌦️', label:'Showers'};
+  if(code>=95&&code<=99)           return{palette:'storm',  emoji:'⛈️',  label:'Stormy'};
+  return                                  {palette:'cloudy', emoji:'☁️',  label:'Cloudy'};
+}
+
+// palette → [stayColor, passColor] 関数
+function paletteColor(palette, r, staying){
+  // r = 0〜1 (来訪者数比率)
+  const P={
+    sunny:  {stay:[255,Math.round(210-r*80),Math.round(20-r*15)],  pass:[Math.round(20+r*60),Math.round(200+r*55),255]},
+    cloudy: {stay:[255,Math.round(130-r*90),Math.round(60-r*50)],  pass:[Math.round(50+r*80),Math.round(150+r*60),255]},
+    fog:    {stay:[Math.round(160-r*40),Math.round(120-r*30),Math.round(200+r*40)], pass:[Math.round(80+r*40),Math.round(140+r*30),Math.round(180+r*60)]},
+    rain:   {stay:[Math.round(120-r*40),Math.round(60-r*30),255],  pass:[Math.round(20+r*30),Math.round(120+r*40),Math.round(200+r*40)]},
+    snow:   {stay:[Math.round(180+r*60),Math.round(210+r*40),255], pass:[Math.round(100+r*80),Math.round(180+r*60),255]},
+    shower: {stay:[Math.round(160-r*40),Math.round(80-r*40),255],  pass:[Math.round(20+r*20),Math.round(160+r*50),Math.round(180+r*60)]},
+    storm:  {stay:[Math.round(180+r*60),Math.round(20+r*60),255],  pass:[Math.round(20+r*20),Math.round(80+r*40),Math.round(220+r*35)]},
+  };
+  const c=(P[palette]||P.cloudy)[staying?'stay':'pass'];
+  return{r:c[0],g:c[1],b:c[2]};
+}
+
+async function fetchWeather(){
+  try{
+    const res=await fetch('https://api.open-meteo.com/v1/forecast?latitude=34.7617&longitude=137.3870&current=weathercode,temperature_2m&timezone=Asia/Tokyo');
+    const json=await res.json();
+    const code=json.current.weathercode;
+    const temp=json.current.temperature_2m;
+    const info=wmoToPalette(code);
+    weather={code,temp,label:info.label,emoji:info.emoji,palette:info.palette};
+    // バッジ更新
+    const badge=document.getElementById('weatherBadge');
+    if(badge) badge.textContent=`${info.emoji} ${info.label} ${temp}°C`;
+    // 凡例の色も更新
+    updateLegendColors();
+  }catch(e){ console.warn('Weather fetch failed',e); }
+}
+
+function updateLegendColors(){
+  const sc=paletteColor(weather.palette,1,true);
+  const pc=paletteColor(weather.palette,1,false);
+  const sd=document.getElementById('leg-stay-dot');
+  const pd=document.getElementById('leg-pass-dot');
+  if(sd) sd.style.background=`radial-gradient(rgb(${sc.r},${sc.g},${sc.b}),rgb(${Math.round(sc.r*.6)},${Math.round(sc.g*.6)},${Math.round(sc.b*.6)}))`;
+  if(sd) sd.style.boxShadow=`0 0 6px rgb(${sc.r},${sc.g},${sc.b})`;
+  if(pd) pd.style.background=`radial-gradient(rgb(${pc.r},${pc.g},${pc.b}),rgb(${Math.round(pc.r*.6)},${Math.round(pc.g*.6)},${Math.round(pc.b*.6)}))`;
+  if(pd) pd.style.boxShadow=`0 0 6px rgb(${pc.r},${pc.g},${pc.b})`;
+}
 let currentMode='all', dataReady=false, sortedFlows=[];
 const leafletMarkers=[], sideItems=[];
 
@@ -293,15 +352,13 @@ async function fetchData(date){
     presence={};
     (json.presence||[]).forEach(p=>{presence[p.loc_id]={count:parseInt(p.count),avg_dwell:parseFloat(p.avg_dwell)};});
     presenceMax=Math.max(...Object.values(presence).map(p=>p.count),1);
-    window._totalUnique = json.total || 0;  // ← ここ追加
     $('dateBadge').textContent=json.date;
     hide(); dataReady=true; return true;
   }catch(e){ show('❌ Load failed: '+e.message); return false; }
 }
 
 function updateStats(){
-  //const totalV=Object.values(presence).reduce((s,p)=>s+p.count,0);
-  const totalV = window._totalUnique || Object.values(presence).reduce((s,p) => s+p.count, 0);
+  const totalV=Object.values(presence).reduce((s,p)=>s+p.count,0);
   const stayF=flows.filter(f=>isStaying(f.distance));
   const passF=flows.filter(f=>!isStaying(f.distance));
   const stayC=stayF.reduce((s,f)=>s+f.count,0);
@@ -371,10 +428,10 @@ new p5(function(s){
       this.flow=flow; this.t=s.random(0,.05); this.alive=true;
       this.side=s.random()>.5?1:-1;
       const r=maxCount>minCount?(flow.count-minCount)/(maxCount-minCount):1;
-      if(isStaying(flow.distance)){this.r=255;this.g=Math.round(130-r*90);this.b=Math.round(60-r*50);}
-      else{this.r=Math.round(50+r*80);this.g=Math.round(150+r*60);this.b=255;}
+      const wc=paletteColor(weather.palette,r,isStaying(flow.distance));
+      this.r=wc.r; this.g=wc.g; this.b=wc.b;
       this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
-      this.sz=1+r*2.5; this.jit=s.random(-.0004,.0004); // this.sz=2+r*5
+      this.sz=2+r*5; this.jit=s.random(-.0004,.0004);
     }
     pos(){
       const fL=locations[this.flow.from],tL=locations[this.flow.to]; if(!fL||!tL)return null;
@@ -579,6 +636,7 @@ leafletMap.whenReady(async()=>{
   const jst=new Date(Date.now()+9*60*60*1000);
   const d=jst.toISOString().slice(0,10);
   $('datePicker').value=d;
+  fetchWeather();
   await fetchData(d);
   initMap();
   $('reloadBtn').addEventListener('click',async()=>{
