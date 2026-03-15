@@ -100,6 +100,31 @@ header {
 .sf-bbg      { height:4px; background:rgba(255,255,255,.06); border-radius:2px; overflow:hidden; margin-bottom:8px; }
 .sf-bar      { height:100%; border-radius:2px; transition:width .8s ease; }
 
+/* EVENT BADGES */
+#event-strip {
+  position:absolute; top:14px; left:50%; transform:translateX(-50%);
+  z-index:660; display:flex; gap:8px; pointer-events:none;
+  max-width:60%; flex-wrap:wrap; justify-content:center;
+}
+.event-badge {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(10,14,26,0.92);
+  border:1px solid rgba(255,255,255,0.15);
+  border-radius:20px; padding:5px 12px;
+  font-family:'Space Mono',monospace; font-size:10px;
+  color:var(--txt); letter-spacing:.06em;
+  backdrop-filter:blur(4px);
+  animation:badgePulse 3s ease-in-out infinite;
+}
+.event-badge-emoji { font-size:13px; }
+.event-badge-title { font-weight:700; }
+.event-badge-loc   { font-size:9px; color:var(--sub); margin-left:2px; }
+
+@keyframes badgePulse {
+  0%,100% { box-shadow:0 0 0px rgba(255,255,255,0); }
+  50%      { box-shadow:0 0 12px rgba(255,255,255,0.12); }
+}
+
 /* TIME SLIDER */
 #time-bar {
   position:absolute; bottom:0; left:0; right:255px; z-index:700;
@@ -282,6 +307,9 @@ header {
       </div>
       <div style="font-size:9px;color:#4a5568;margin-top:5px;line-height:1.8;">Node size = visitor count<br>Ring pulse = presence intensity</div>
     </div>
+    <!-- Event Badges -->
+    <div id="event-strip"></div>
+
     <!-- Time Slider -->
     <div id="time-bar">
       <div class="time-controls">
@@ -397,6 +425,7 @@ function updateLegendColors(){
   if(pd) pd.style.boxShadow=`0 0 6px rgb(${pc.r},${pc.g},${pc.b})`;
 }
 let currentMode='all', dataReady=false, sortedFlows=[];
+let todayEvents=[];  // 今日のイベント
 let allFlows=[], allPresence=[];       // 全時間帯の生データ
 let currentHour=-1;                    // -1=全日表示
 let isPlaying=false;
@@ -447,6 +476,7 @@ async function fetchData(date){
     // 表示用データをhourでフィルタ
     applyHourFilter(currentHour);
     window._totalVisitors=parseInt(json.total)||0;
+    todayEvents=json.events||[];
     $('dateBadge').textContent=json.date;
     hide(); dataReady=true; return true;
   }catch(e){ show('❌ Load failed: '+e.message); return false; }
@@ -511,6 +541,53 @@ function updateSliderUI(hour){
   // スライダーグラデーション
   const pct=hour===-1?0:Math.round((hour/23)*100);
   sl.style.background=`linear-gradient(to right, var(--red) ${pct}%, rgba(255,255,255,.12) ${pct}%)`;
+}
+
+// ── EVENT BADGE TYPES ────────────────────────
+const EVENT_META = {
+  '朝市':               { emoji:'🌅', color:'#ffaa40', en:'Morning Market'  },
+  'アンティークマーケット': { emoji:'🏺', color:'#cc88ff', en:'Antique Market'  },
+  '夏至祭':             { emoji:'🌞', color:'#ffee44', en:'Summer Solstice'  },
+};
+
+function renderEventBadges(){
+  const strip = document.getElementById('event-strip');
+  if(!strip) return;
+  strip.innerHTML = '';
+  if(!todayEvents || todayEvents.length === 0) return;
+
+  todayEvents.forEach(ev => {
+    const meta = EVENT_META[ev.title] || { emoji:'📌', color:'#aaaaaa', en:ev.title };
+    const locs = ev.locations ? ev.locations.split(',').map(l=>l.trim()) : [];
+    const locText = locs.length > 0
+      ? locs.map(l=>l.replace('棟','')).join('·')
+      : '';
+
+    const badge = document.createElement('div');
+    badge.className = 'event-badge';
+    badge.style.borderColor = meta.color + '66';
+    badge.style.boxShadow   = `0 0 10px ${meta.color}33`;
+    badge.innerHTML = `
+      <span class="event-badge-emoji">${meta.emoji}</span>
+      <span class="event-badge-title" style="color:${meta.color}">${meta.en}</span>
+      ${locText ? `<span class="event-badge-loc">${locText}</span>` : ''}
+    `;
+    strip.appendChild(badge);
+  });
+}
+
+// イベント拠点のマーカーをハイライト
+function highlightEventLocations(){
+  if(!todayEvents || todayEvents.length === 0) return;
+  const eventLocs = new Set();
+  todayEvents.forEach(ev => {
+    if(ev.locations){
+      ev.locations.split(',').forEach(l => eventLocs.add(l.trim()));
+    }
+  });
+  // p5キャンバスのリング色はdrawRingsで自動対応
+  // Leafletマーカーにイベントクラスを付与
+  window._eventLocs = eventLocs;
 }
 
 function updateStats(){
@@ -635,11 +712,18 @@ new p5(function(s){
       const pr=presence[name]||{count:0};
       const ratio=presenceMax>0?pr.count/presenceMax:0; if(ratio<.01)return;
       const br=Math.round(100-ratio*100),bg=Math.round(100-ratio*60),bb=Math.round(120+ratio*135);
-      s.noFill(); s.strokeWeight(1.2);
+      // イベント拠点はゴールドリング
+      const isEventLoc = window._eventLocs && window._eventLocs.has(name);
+      s.noFill(); s.strokeWeight(isEventLoc ? 2 : 1.2);
       for(let i=0;i<3;i++){
-        const ph=((now*.55)+i/3)%1;
-        s.stroke(br,bg,bb,(1-ph)*150*ratio);
-        s.circle(px.x,px.y,ph*(18+ratio*26)*2);
+        const ph=((now*(isEventLoc?.8:.55))+i/3)%1;
+        if(isEventLoc){
+          s.stroke(255, 200, 50, (1-ph)*200);
+        } else {
+          s.stroke(br,bg,bb,(1-ph)*150*ratio);
+        }
+        const maxR = isEventLoc ? (22+ratio*30) : (18+ratio*26);
+        s.circle(px.x,px.y,ph*maxR*2);
       }
       s.strokeWeight(1); s.noStroke();
     });
@@ -714,7 +798,7 @@ function clearMapData(){
 }
 
 function initMap(){
-  clearMapData(); updateStats();
+  clearMapData(); updateStats(); renderEventBadges(); highlightEventLocations();
   const ls={};
   flows.forEach(f=>{
     if(!ls[f.from])ls[f.from]={out:0,in:0}; if(!ls[f.to])ls[f.to]={out:0,in:0};
