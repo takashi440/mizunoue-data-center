@@ -556,8 +556,9 @@ new p5(function(s){
     s.clear();
     flows.forEach(flow=>{
       if(!isVisible(flow))return;
-      const r=maxCount>1?(flow.count-minCount)/(maxCount-minCount):1;
-      if(s.random()<.015+r*.265)particles.push(new Particle(flow));
+      // 絶対値ベース：300人で最大密度
+      const spawnRate = Math.min(flow.count / 300, 1) * 0.28;
+      if(s.random() < spawnRate) particles.push(new Particle(flow));
     });
     if(particles.length>650)particles.splice(0,particles.length-650);
     particles=particles.filter(p=>{p.update();if(p.alive)p.draw();return p.alive;});
