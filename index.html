@@ -578,6 +578,7 @@ function renderEventBadges(){
 
 // イベント拠点のマーカーをハイライト
 function highlightEventLocations(){
+  window._eventLocs = new Set(); // ← 先にリセット
   if(!todayEvents || todayEvents.length === 0) return;
   const eventLocs = new Set();
   todayEvents.forEach(ev => {
