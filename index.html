@@ -667,15 +667,23 @@ new p5(function(s){
         const wc=paletteColor(weather.palette,r,true);
         this.r=wc.r; this.g=wc.g; this.b=wc.b;
       } else {
-        // Passing → 気温で色が変わる（寒色系のみ）
-        // -5°C=氷青白 → 10°C=シアン → 20°C=ティール → 28°C=緑 → 35°C=黄緑
-        const t=weather.temp!==null ? Math.max(0,Math.min(1,(weather.temp+5)/40)) : 0.4;
-        let cr,cg,cb;
-        if(t<0.25){      const u=t/0.25;      cr=Math.round(u*20);            cg=Math.round(200+u*55);  cb=255; }           // 氷青白→シアン
-        else if(t<0.5){  const u=(t-.25)/.25; cr=Math.round(20+u*10);         cg=Math.round(255);       cb=Math.round(255-u*100); } // シアン→ティール
-        else if(t<0.75){ const u=(t-.5)/.25;  cr=Math.round(30+u*50);         cg=Math.round(255);       cb=Math.round(155-u*100); } // ティール→緑
-        else{            const u=(t-.75)/.25;  cr=Math.round(80+u*120);        cg=Math.round(255-u*40);  cb=Math.round(55-u*40); }   // 緑→黄緑
-        this.r=cr; this.g=cg; this.b=cb;
+        // Passing → 気温で色が変わる（季節別レンジ）
+        const month = new Date().getMonth() + 1;
+        const [tMin, tMax] =
+          month >= 3 && month <= 5  ? [5,  25] :  // 春
+          month >= 6 && month <= 8  ? [20, 38] :  // 夏
+          month >= 9 && month <= 11 ? [10, 28] :  // 秋
+                                       [-2, 15];  // 冬
+        const t = weather.temp !== null
+          ? Math.max(0, Math.min(1, (weather.temp - tMin) / (tMax - tMin)))
+          : 0.4;
+      
+        let cr, cg, cb;
+        if(t < 0.25){      const u = t / 0.25;       cr = Math.round(u * 20);        cg = Math.round(200 + u * 55); cb = 255; }
+        else if(t < 0.5){  const u = (t - .25) / .25; cr = Math.round(20 + u * 10);  cg = 255;                      cb = Math.round(255 - u * 100); }
+        else if(t < 0.75){ const u = (t - .5)  / .25; cr = Math.round(30 + u * 50);  cg = 255;                      cb = Math.round(155 - u * 100); }
+        else{              const u = (t - .75) / .25;  cr = Math.round(80 + u * 120); cg = Math.round(255 - u * 40); cb = Math.round(55 - u * 40); }
+        this.r = cr; this.g = cg; this.b = cb;
       }
       this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
       this.sz=1+r*4; this.jit=s.random(-.0004,.0004);
