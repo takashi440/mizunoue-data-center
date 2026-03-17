@@ -677,7 +677,7 @@ new p5(function(s){
         this.r=cr; this.g=cg; this.b=cb;
       }
       this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
-      this.sz=1+r*5; this.jit=s.random(-.0004,.0004);
+      this.sz=1+r*4; this.jit=s.random(-.0004,.0004);
     }
     pos(){
       const fL=locations[this.flow.from],tL=locations[this.flow.to]; if(!fL||!tL)return null;
@@ -774,7 +774,7 @@ new p5(function(s){
     flows.forEach(flow=>{
       if(!isVisible(flow))return;
       // 絶対値ベース：300人で最大密度
-      const spawnRate = Math.min(flow.count / 200, 1) * 0.28;
+      const spawnRate = Math.min(flow.count / 300, 1) * 0.28;
       if(s.random() < spawnRate) particles.push(new Particle(flow));
     });
     if(particles.length>650)particles.splice(0,particles.length-650);
