@@ -696,11 +696,11 @@ new p5(function(s){
       const ez=.12, al=this.t<ez?this.t/ez:this.t>1-ez?(1-this.t)/ez:1;
       const a=Math.round(al*255);
       const ctx=s.drawingContext;
-      ctx.shadowBlur=22; ctx.shadowColor=`rgba(${this.r},${this.g},${this.b},${(al*.88).toFixed(2)})`;
+      ctx.shadowBlur=50; ctx.shadowColor=`rgba(${this.r},${this.g},${this.b},${(al*.88).toFixed(2)})`;
       s.noStroke();
       s.fill(255,255,255,a);                            s.circle(p.x,p.y,this.sz);
-      s.fill(this.r,this.g,this.b,Math.round(al*170));  s.circle(p.x,p.y,this.sz*4.8);
-      s.fill(this.r,this.g,this.b,Math.round(al*100));   s.circle(p.x,p.y,this.sz*6.5);
+      s.fill(this.r,this.g,this.b,Math.round(al*170));  s.circle(p.x,p.y,this.sz*2.8);
+      s.fill(this.r,this.g,this.b,Math.round(al*40));   s.circle(p.x,p.y,this.sz*6.5);
       ctx.shadowBlur=0;
     }
   }
