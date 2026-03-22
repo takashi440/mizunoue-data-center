@@ -56,7 +56,7 @@ header {
 /* MAP OVERLAY PANELS */
 .map-panel { position:absolute; z-index:650; background:var(--panel); border:1px solid var(--brd); border-radius:8px; padding:12px 15px; pointer-events:none; backdrop-filter:blur(4px); }
 
-#panel-ticker { top:14px; left:14px; min-width:185px; }
+#panel-ticker { top:14px; left:14px; min-width:185px; border-color:rgba(255,100,100,0.45); background:rgba(5,8,18,0.97); border-left:3px solid var(--red); }
 .ticker-head { font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--mut); margin-bottom:9px; display:flex; align-items:center; gap:7px; }
 .live-dot { width:6px; height:6px; border-radius:50%; background:#44ff88; box-shadow:0 0 6px #44ff88; animation:blink 1.6s ease-in-out infinite; }
 @keyframes blink { 0%,100%{opacity:1}50%{opacity:.25} }
@@ -340,9 +340,9 @@ header {
     <div class="sb-foot">
       <div class="sf-row"><span style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);">Visitor Split</span></div>
       <div class="sf-row"><span>Staying</span><span id="sfStay" style="color:var(--txt);font-weight:700;">—</span></div>
-      <div class="sf-bbg"><div class="sf-bar" id="sfStayBar" style="width:0%;background:linear-gradient(to right,#ffaa60,#ff3030);"></div></div>
+      <div class="sf-bbg"><div class="sf-bar" id="sfStayBar" style="width:0%;"></div></div>
       <div class="sf-row"><span>Passing</span><span id="sfPass" style="color:var(--txt);font-weight:700;">—</span></div>
-      <div class="sf-bbg"><div class="sf-bar" id="sfPassBar" style="width:0%;background:linear-gradient(to right,#88ddff,#4488ff);"></div></div>
+      <div class="sf-bbg"><div class="sf-bar" id="sfPassBar" style="width:0%;"></div></div>
     </div>
   </div>
 </div>
@@ -437,11 +437,41 @@ function heatColor(count,alpha=1,mn=null,mx=null){
   const t=hi===lo?1:(count-lo)/(hi-lo);
   return `rgba(255,${Math.round(180*(1-t))},${Math.round(180*(1-t))},${alpha})`;
 }
+
+// ★ isStaying を先に定義（getFlowColor が参照するため）
 const isStaying=d=>d>=150;
 const isVisible=f=>{
   const st=isStaying(f.distance);
   return currentMode==='all'||(currentMode==='passing'&&!st)||(currentMode==='staying'&&st);
 };
+
+// ★ 粒と同じロジックで色を返す（サイドバー・フッターバー共通）
+function getFlowColor(flow){
+  const r=maxCount>minCount?(flow.count-minCount)/(maxCount-minCount):1;
+  let cr,cg,cb;
+  if(isStaying(flow.distance)){
+    const wc=paletteColor(weather.palette,r,true);
+    cr=wc.r; cg=wc.g; cb=wc.b;
+  } else {
+    const month=new Date().getMonth()+1;
+    const [tMin,tMax]=
+      month>=3&&month<=5?[5,25]:
+      month>=6&&month<=8?[20,38]:
+      month>=9&&month<=11?[10,28]:[-2,15];
+    const t=weather.temp!==null?Math.max(0,Math.min(1,(weather.temp-tMin)/(tMax-tMin))):0.4;
+    if(t<0.25){      const u=t/0.25;       cr=Math.round(u*20);       cg=Math.round(200+u*55); cb=255;}
+    else if(t<0.5){  const u=(t-.25)/.25;  cr=Math.round(20+u*10);    cg=255;                  cb=Math.round(255-u*100);}
+    else if(t<0.75){ const u=(t-.5)/.25;   cr=Math.round(30+u*50);    cg=255;                  cb=Math.round(155-u*100);}
+    else{            const u=(t-.75)/.25;  cr=Math.round(80+u*120);   cg=Math.round(255-u*40); cb=Math.round(55-u*40);}
+  }
+  // 湿度くすみ
+  const hf=Math.max(0,(weather.humidity-40)/60)*0.4;
+  const gray=(cr+cg+cb)/3;
+  cr=Math.round(cr+(gray-cr)*hf);
+  cg=Math.round(cg+(gray-cg)*hf);
+  cb=Math.round(cb+(gray-cb)*hf);
+  return `rgb(${cr},${cg},${cb})`;
+}
 
 function animCount(el,target,dur=900){
   const start=parseInt(el.dataset.val||0);
@@ -601,12 +631,17 @@ function updateStats(){
     $('topMeta').innerHTML=`<b>${top.count.toLocaleString()}</b> visitors · <b>${top.distance}m</b> · ${isStaying(top.distance)?'Staying':'Passing'}`;
   }
 
+  // ★ フッターバーの色を粒と同じカラーロジックで設定
   const maxFC=Math.max(stayC,passC,1);
+  const stayColor=getFlowColor({count:maxCount,distance:200});
+  const passColor=getFlowColor({count:maxCount,distance:50});
   $('sfStay').textContent=stayC.toLocaleString()+' pax';
   $('sfPass').textContent=passC.toLocaleString()+' pax';
   setTimeout(()=>{
     $('sfStayBar').style.width=Math.round(stayC/maxFC*100)+'%';
+    $('sfStayBar').style.background=stayColor;
     $('sfPassBar').style.width=Math.round(passC/maxFC*100)+'%';
+    $('sfPassBar').style.background=passColor;
   },120);
 }
 
@@ -660,16 +695,15 @@ new p5(function(s){
         this.r = cr; this.g = cg; this.b = cb;
       }
       this.speed=isStaying(flow.distance)
-        ? s.random(.003,.007)   // Staying は風の影響小
-        : s.random(.009,.018) * (1 + Math.min(weather.wind/25,1) * 0.7); // Passing は風で加速
+        ? s.random(.003,.007)
+        : s.random(.009,.018) * (1 + Math.min(weather.wind/25,1) * 0.7);
 
-      // 湿度によるくすみ（40%基準、100%で最大40%グレー寄り）
+      // 湿度によるくすみ
       const humidFactor = Math.max(0, (weather.humidity - 40) / 60) * 0.4;
       const gray = (this.r + this.g + this.b) / 3;
       this.r = Math.round(this.r + (gray - this.r) * humidFactor);
       this.g = Math.round(this.g + (gray - this.g) * humidFactor);
       this.b = Math.round(this.b + (gray - this.b) * humidFactor);
-      // ★ HYBRID sz: v1とv2の中間
       this.sz=1.5+r*4.5; this.jit=s.random(-.0004,.0004);
     }
     pos(){
@@ -689,7 +723,6 @@ new p5(function(s){
       const ez=.12, al=this.t<ez?this.t/ez:this.t>1-ez?(1-this.t)/ez:1;
       const a=Math.round(al*255);
       const ctx=s.drawingContext;
-      // ★ HYBRID shadowBlur: 中間値45
       ctx.shadowBlur=45; ctx.shadowColor=`rgba(${this.r},${this.g},${this.b},${(al*.88).toFixed(2)})`;
       s.noStroke();
       s.fill(255,255,255,a);                            s.circle(p.x,p.y,this.sz);
@@ -764,11 +797,9 @@ new p5(function(s){
     s.clear();
     flows.forEach(flow=>{
       if(!isVisible(flow))return;
-      // ★ HYBRID spawn: 底上げ付き絶対値ベース
       const spawnRate = 0.015 + Math.min(flow.count / 300, 1) * 0.26;
       if(s.random() < spawnRate) particles.push(new Particle(flow));
     });
-    // ★ HYBRID 上限: バグ修正 + v1水準
     if(particles.length>700)particles.splice(0,particles.length-700);
     particles=particles.filter(p=>{p.update();if(p.alive)p.draw();return p.alive;});
     drawRings(); drawNodeStats(); drawVignette();
@@ -830,7 +861,8 @@ function initMap(){
   sorted.forEach((flow,rank)=>{
     const pct=maxCount>minCount?Math.round((flow.count-minCount)/(maxCount-minCount)*100):100;
     const st=isStaying(flow.distance);
-    const c=heatColor(flow.count,1);
+    // ★ サイドバーの色を粒と同じロジックで生成
+    const c=getFlowColor(flow);
     const rc=rank===0?'r1':rank===1?'r2':rank===2?'r3':'';
     const item=document.createElement('div');
     item.className='flow-item';
@@ -856,14 +888,12 @@ function initMap(){
 }
 
 function updateSidebarColors(mode){
-  const vf=sortedFlows.filter(f=>{const st=isStaying(f.distance);return mode==='all'||(mode==='passing'&&!st)||(mode==='staying'&&st);});
-  const mx=vf.length?Math.max(...vf.map(f=>f.count)):maxCount;
-  const mn=vf.length?Math.min(...vf.map(f=>f.count)):minCount;
   sideItems.forEach((item,i)=>{
     const f=sortedFlows[i]; if(!f)return;
     const st=isStaying(f.distance);
     const vis=mode==='all'||(mode==='passing'&&!st)||(mode==='staying'&&st);
-    const c=heatColor(f.count,1,mn,mx);
+    // ★ updateSidebarColors も getFlowColor で統一
+    const c=getFlowColor(f);
     item.querySelector('.flow-swatch').style.cssText=`background:${c};box-shadow:0 0 5px ${c};`;
     item.querySelector('.flow-bar').style.background=c;
     item.querySelector('.flow-cnt').style.color=c;
@@ -884,11 +914,15 @@ leafletMap.whenReady(async()=>{
   const jst=new Date(Date.now()+9*60*60*1000);
   const d=jst.toISOString().slice(0,10);
   $('datePicker').value=d;
-  fetchWeather(d);
+  // ★ fetchWeather を await して色が確定してから initMap
+  await fetchWeather(d);
   await fetchData(d);
   initMap();
   $('reloadBtn').addEventListener('click',async()=>{
-    const rd=$('datePicker').value; fetchWeather(rd); await fetchData(rd); initMap();
+    const rd=$('datePicker').value;
+    await fetchWeather(rd);
+    await fetchData(rd);
+    initMap();
   });
 });
 
