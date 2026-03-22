@@ -355,7 +355,6 @@ let locations={}, flows=[], maxCount=1, minCount=0, presence={}, presenceMax=1;
 // ── WEATHER ──────────────────────────────────
 let weather={code:null,temp:null,label:'',emoji:'☁️',palette:'cloudy'};
 
-// WMO code → palette
 function wmoToPalette(code){
   if(code===0||code===1)           return{palette:'sunny',  emoji:'☀️',  label:'Clear'};
   if(code===2||code===3)           return{palette:'cloudy', emoji:'☁️',  label:'Cloudy'};
@@ -367,18 +366,15 @@ function wmoToPalette(code){
   return                                  {palette:'cloudy', emoji:'☁️',  label:'Cloudy'};
 }
 
-// palette → [stayColor, passColor] 関数
 function paletteColor(palette, r, staying){
-  // Staying = 暖色系のみ（赤・橙・黄・ピンク・マゼンタ）
-  // Passing = 寒色系のみ（シアン・緑・ティール）→ tempColorで使用
   const WARM={
-    sunny:  [255, Math.round(200-r*60), Math.round(10+r*20)],   // 黄橙〜橙
-    cloudy: [255, Math.round(110-r*60), Math.round(40-r*30)],   // 赤橙
-    fog:    [Math.round(220+r*35), Math.round(80-r*40), Math.round(140+r*40)], // ローズ〜マゼンタ
-    rain:   [Math.round(200-r*60), Math.round(20+r*20), Math.round(80+r*60)],  // 深紅〜クリムゾン
-    snow:   [Math.round(240+r*15), Math.round(160+r*60), Math.round(180+r*60)],// ピンク〜ラベンダーピンク
-    shower: [255, Math.round(60-r*40), Math.round(120+r*60)],   // 赤ピンク〜マゼンタ
-    storm:  [Math.round(180-r*60), Math.round(0+r*20), Math.round(60+r*40)],   // バーガンディ〜ディープレッド
+    sunny:  [255, Math.round(200-r*60), Math.round(10+r*20)],
+    cloudy: [255, Math.round(110-r*60), Math.round(40-r*30)],
+    fog:    [Math.round(220+r*35), Math.round(80-r*40), Math.round(140+r*40)],
+    rain:   [Math.round(200-r*60), Math.round(20+r*20), Math.round(80+r*60)],
+    snow:   [Math.round(240+r*15), Math.round(160+r*60), Math.round(180+r*60)],
+    shower: [255, Math.round(60-r*40), Math.round(120+r*60)],
+    storm:  [Math.round(180-r*60), Math.round(0+r*20), Math.round(60+r*40)],
   };
   const c=(WARM[palette]||WARM.cloudy);
   return{r:c[0],g:c[1],b:c[2]};
@@ -392,16 +388,14 @@ async function fetchWeather(date){
 
     let code, temp;
     if(isToday){
-      // 今日 → forecast API（current）
       const res=await fetch('https://api.open-meteo.com/v1/forecast?latitude=34.7617&longitude=137.3870&current=weathercode,temperature_2m&timezone=Asia/Tokyo');
       const json=await res.json();
       code=json.current.weathercode;
       temp=json.current.temperature_2m;
     } else {
-      // 過去 → archive API（hourly 12時の値を代表値として使用）
       const res=await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=34.7617&longitude=137.3870&start_date=${date}&end_date=${date}&hourly=weathercode,temperature_2m&timezone=Asia/Tokyo`);
       const json=await res.json();
-      const idx=12; // 正午の値
+      const idx=12;
       code=json.hourly.weathercode[idx];
       temp=json.hourly.temperature_2m[idx];
     }
@@ -416,18 +410,15 @@ async function fetchWeather(date){
 
 function updateLegendColors(){
   const sc=paletteColor(weather.palette,1,true);
-  const pc=paletteColor(weather.palette,1,false);
   const sd=document.getElementById('leg-stay-dot');
-  const pd=document.getElementById('leg-pass-dot');
   if(sd) sd.style.background=`radial-gradient(rgb(${sc.r},${sc.g},${sc.b}),rgb(${Math.round(sc.r*.6)},${Math.round(sc.g*.6)},${Math.round(sc.b*.6)}))`;
   if(sd) sd.style.boxShadow=`0 0 6px rgb(${sc.r},${sc.g},${sc.b})`;
-  if(pd) pd.style.background=`radial-gradient(rgb(${pc.r},${pc.g},${pc.b}),rgb(${Math.round(pc.r*.6)},${Math.round(pc.g*.6)},${Math.round(pc.b*.6)}))`;
-  if(pd) pd.style.boxShadow=`0 0 6px rgb(${pc.r},${pc.g},${pc.b})`;
 }
+
 let currentMode='all', dataReady=false, sortedFlows=[];
-let todayEvents=[];  // 今日のイベント
-let allFlows=[], allPresence=[];       // 全時間帯の生データ
-let currentHour=-1;                    // -1=全日表示
+let todayEvents=[];
+let allFlows=[], allPresence=[];
+let currentHour=-1;
 let isPlaying=false;
 let playTimer=null;
 const leafletMarkers=[], sideItems=[];
@@ -469,11 +460,8 @@ async function fetchData(date){
     if(json.error) throw new Error(json.error);
     locations={};
     json.locations.forEach(l=>{locations[l.loc_id]={lat:parseFloat(l.lat),lng:parseFloat(l.lng)};});
-    // 全時間帯データを保存
     allFlows=json.flows.map(f=>({from:f.from_loc,to:f.to_loc,count:parseInt(f.count),distance:parseFloat(f.distance),hour:parseInt(f.hour_jst)}));
     allPresence=json.presence.map(p=>({loc_id:p.loc_id,count:parseInt(p.count),avg_dwell:parseFloat(p.avg_dwell),hour:parseInt(p.hour_jst)}));
-
-    // 表示用データをhourでフィルタ
     applyHourFilter(currentHour);
     window._totalVisitors=parseInt(json.total)||0;
     todayEvents=json.events||[];
@@ -485,7 +473,6 @@ async function fetchData(date){
 function applyHourFilter(hour){
   currentHour=hour;
   if(hour===-1){
-    // 全日：hour関係なく集計
     const flowMap={};
     allFlows.forEach(f=>{
       const key=f.from+'|'+f.to+'|'+f.distance;
@@ -505,7 +492,6 @@ function applyHourFilter(hour){
       presence[id]={count:v.count,avg_dwell:v.n>0?Math.round(v.avg_dwell/v.n):0};
     });
   } else {
-    // 時間帯フィルタ
     const hf=allFlows.filter(f=>f.hour===hour);
     const flowMap={};
     hf.forEach(f=>{
@@ -522,7 +508,6 @@ function applyHourFilter(hour){
   maxCount=Math.max(...flows.map(f=>f.count),1);
   minCount=Math.min(...flows.map(f=>f.count),0);
   presenceMax=Math.max(...Object.values(presence).map(p=>p.count),1);
-  // スライダーUI更新
   updateSliderUI(hour);
 }
 
@@ -538,12 +523,10 @@ function updateSliderUI(hour){
     lbl.textContent=`${String(hour).padStart(2,'0')}:00`;
     sub.textContent=`${String(hour).padStart(2,'0')}:00 – ${String(hour+1).padStart(2,'0')}:00 JST`;
   }
-  // スライダーグラデーション
   const pct=hour===-1?0:Math.round((hour/23)*100);
   sl.style.background=`linear-gradient(to right, var(--red) ${pct}%, rgba(255,255,255,.12) ${pct}%)`;
 }
 
-// ── EVENT BADGE TYPES ────────────────────────
 const EVENT_META = {
   '朝市':               { emoji:'🌅', color:'#ffaa40', en:'Morning Market'  },
   'アンティークマーケット': { emoji:'🏺', color:'#cc88ff', en:'Antique Market'  },
@@ -555,14 +538,10 @@ function renderEventBadges(){
   if(!strip) return;
   strip.innerHTML = '';
   if(!todayEvents || todayEvents.length === 0) return;
-
   todayEvents.forEach(ev => {
     const meta = EVENT_META[ev.title] || { emoji:'📌', color:'#aaaaaa', en:ev.title };
     const locs = ev.locations ? ev.locations.split(',').map(l=>l.trim()) : [];
-    const locText = locs.length > 0
-      ? locs.map(l=>l.replace('棟','')).join('·')
-      : '';
-
+    const locText = locs.length > 0 ? locs.map(l=>l.replace('棟','')).join('·') : '';
     const badge = document.createElement('div');
     badge.className = 'event-badge';
     badge.style.borderColor = meta.color + '66';
@@ -576,9 +555,8 @@ function renderEventBadges(){
   });
 }
 
-// イベント拠点のマーカーをハイライト
 function highlightEventLocations(){
-  window._eventLocs = new Set(); // ← 先にリセット
+  window._eventLocs = new Set();
   if(!todayEvents || todayEvents.length === 0) return;
   const eventLocs = new Set();
   todayEvents.forEach(ev => {
@@ -586,8 +564,6 @@ function highlightEventLocations(){
       ev.locations.split(',').forEach(l => eventLocs.add(l.trim()));
     }
   });
-  // p5キャンバスのリング色はdrawRingsで自動対応
-  // Leafletマーカーにイベントクラスを付与
   window._eventLocs = eventLocs;
 }
 
@@ -602,7 +578,6 @@ function updateStats(){
   const avgD=dwells.length?(dwells.reduce((a,b)=>a+b,0)/dwells.length).toFixed(1):'—';
   const peak=Object.entries(presence).sort((a,b)=>b[1].count-a[1].count)[0];
 
-  // header
   const hEl=$('hTotal'); hEl.innerHTML=`<span id="_hT"></span><span>pax</span>`;
   animCount($('_hT'),totalV);
   $('hFlows').innerHTML=flows.length+'<span>routes</span>';
@@ -610,20 +585,17 @@ function updateStats(){
   $('hStay').innerHTML=stayR+'<span>%</span>';
   $('hPeak').textContent=peak?peak[0]:'—';
 
-  // ticker
   animCount($('tTotal'),totalV);
   animCount($('tNodes'),Object.keys(presence).length);
   animCount($('tFlows'),flows.length);
   animCount($('tStay'),stayR);
 
-  // top route
   if(flows.length){
     const top=[...flows].sort((a,b)=>b.count-a.count)[0];
     $('topName').textContent=`${top.from} → ${top.to}`;
     $('topMeta').innerHTML=`<b>${top.count.toLocaleString()}</b> visitors · <b>${top.distance}m</b> · ${isStaying(top.distance)?'Staying':'Passing'}`;
   }
 
-  // footer bars
   const maxFC=Math.max(stayC,passC,1);
   $('sfStay').textContent=stayC.toLocaleString()+' pax';
   $('sfPass').textContent=passC.toLocaleString()+' pax';
@@ -663,21 +635,18 @@ new p5(function(s){
       this.side=s.random()>.5?1:-1;
       const r=maxCount>minCount?(flow.count-minCount)/(maxCount-minCount):1;
       if(isStaying(flow.distance)){
-        // Staying → 天気で色が変わる
         const wc=paletteColor(weather.palette,r,true);
         this.r=wc.r; this.g=wc.g; this.b=wc.b;
       } else {
-        // Passing → 気温で色が変わる（季節別レンジ）
         const month = new Date().getMonth() + 1;
         const [tMin, tMax] =
-          month >= 3 && month <= 5  ? [5,  25] :  // 春
-          month >= 6 && month <= 8  ? [20, 38] :  // 夏
-          month >= 9 && month <= 11 ? [10, 28] :  // 秋
-                                       [-2, 15];  // 冬
+          month >= 3 && month <= 5  ? [5,  25] :
+          month >= 6 && month <= 8  ? [20, 38] :
+          month >= 9 && month <= 11 ? [10, 28] :
+                                       [-2, 15];
         const t = weather.temp !== null
           ? Math.max(0, Math.min(1, (weather.temp - tMin) / (tMax - tMin)))
           : 0.4;
-      
         let cr, cg, cb;
         if(t < 0.25){      const u = t / 0.25;       cr = Math.round(u * 20);        cg = Math.round(200 + u * 55); cb = 255; }
         else if(t < 0.5){  const u = (t - .25) / .25; cr = Math.round(20 + u * 10);  cg = 255;                      cb = Math.round(255 - u * 100); }
@@ -686,7 +655,8 @@ new p5(function(s){
         this.r = cr; this.g = cg; this.b = cb;
       }
       this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
-      this.sz=1+r*4; this.jit=s.random(-.0004,.0004);
+      // ★ HYBRID sz: v1とv2の中間
+      this.sz=1.5+r*4.5; this.jit=s.random(-.0004,.0004);
     }
     pos(){
       const fL=locations[this.flow.from],tL=locations[this.flow.to]; if(!fL||!tL)return null;
@@ -705,7 +675,8 @@ new p5(function(s){
       const ez=.12, al=this.t<ez?this.t/ez:this.t>1-ez?(1-this.t)/ez:1;
       const a=Math.round(al*255);
       const ctx=s.drawingContext;
-      ctx.shadowBlur=65; ctx.shadowColor=`rgba(${this.r},${this.g},${this.b},${(al*.88).toFixed(2)})`;
+      // ★ HYBRID shadowBlur: 中間値45
+      ctx.shadowBlur=45; ctx.shadowColor=`rgba(${this.r},${this.g},${this.b},${(al*.88).toFixed(2)})`;
       s.noStroke();
       s.fill(255,255,255,a);                            s.circle(p.x,p.y,this.sz);
       s.fill(this.r,this.g,this.b,Math.round(al*170));  s.circle(p.x,p.y,this.sz*2.8);
@@ -721,7 +692,6 @@ new p5(function(s){
       const pr=presence[name]||{count:0};
       const ratio=presenceMax>0?pr.count/presenceMax:0; if(ratio<.01)return;
       const br=Math.round(100-ratio*100),bg=Math.round(100-ratio*60),bb=Math.round(120+ratio*135);
-      // イベント拠点はゴールドリング
       const isEventLoc = window._eventLocs && window._eventLocs.has(name);
       s.noFill(); s.strokeWeight(isEventLoc ? 2 : 1.2);
       for(let i=0;i<3;i++){
@@ -745,14 +715,12 @@ new p5(function(s){
       const px=leafletMap.latLngToContainerPoint([pos.lat,pos.lng]);
       const ratio=presenceMax>0?pr.count/presenceMax:0;
       const sz=Math.round(28+ratio*24);
-      const ox=sz/2+4;   // 右下へ
+      const ox=sz/2+4;
       const oy=sz/2+4;
       s.noStroke();
-      // visitor count badge
       s.fill(10,14,26,200); s.rect(px.x+ox,px.y+oy,54,18,4);
       s.fill(200,220,255,220); s.textSize(9); s.textAlign(s.LEFT,s.CENTER);
       s.text(pr.count.toLocaleString()+' pax',px.x+ox+4,px.y+oy+9);
-      // dwell badge
       if(pr.avg_dwell>0){
         s.fill(10,14,26,185); s.rect(px.x+ox,px.y+oy+18,54,16,4);
         s.fill(100,200,130,210); s.textSize(9);
@@ -782,11 +750,12 @@ new p5(function(s){
     s.clear();
     flows.forEach(flow=>{
       if(!isVisible(flow))return;
-      // 絶対値ベース：300人で最大密度
-      const spawnRate = Math.min(flow.count / 300, 1) * 0.32;
+      // ★ HYBRID spawn: 底上げ付き絶対値ベース
+      const spawnRate = 0.015 + Math.min(flow.count / 300, 1) * 0.26;
       if(s.random() < spawnRate) particles.push(new Particle(flow));
     });
-    if(particles.length>800)particles.splice(0,particles.length-650);
+    // ★ HYBRID 上限: バグ修正 + v1水準
+    if(particles.length>700)particles.splice(0,particles.length-700);
     particles=particles.filter(p=>{p.update();if(p.alive)p.draw();return p.alive;});
     drawRings(); drawNodeStats(); drawVignette();
   };
@@ -938,15 +907,12 @@ document.querySelectorAll('.time-mode-btn').forEach(btn=>{
 function startPlay(){
   isPlaying=true;
   document.getElementById('playBtn').textContent='⏸';
-  // -1（全日）から始まる場合は0時から
   let h = currentHour===-1 ? 0 : currentHour;
-  // 最後の時間まで来たらリセット
   const hours = [...new Set(allFlows.map(f=>f.hour))].sort((a,b)=>a-b);
   if(hours.length===0){stopPlay();return;}
 
   function tick(){
     if(!isPlaying) return;
-    // その時間にデータがある時間だけ表示
     const idx = hours.indexOf(h);
     applyHourFilter(h);
     initMap();
@@ -954,15 +920,10 @@ function startPlay(){
     document.getElementById('timeModeHour').click();
     document.querySelectorAll('.time-mode-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('timeModeHour').classList.add('active');
-
     const next = hours[idx+1];
-    if(next===undefined){
-      // 最後まで来たら止まる
-      stopPlay();
-      return;
-    }
+    if(next===undefined){ stopPlay(); return; }
     h = next;
-    playTimer = setTimeout(tick, 3000); // 1.2秒ごとに進む
+    playTimer = setTimeout(tick, 3000);
   }
   tick();
 }
@@ -973,14 +934,12 @@ function stopPlay(){
   if(playTimer){ clearTimeout(playTimer); playTimer=null; }
 }
 
-// DRAWER (mobile)
 function toggleDrawer(){
   const sb=document.querySelector('.sidebar');
   const btn=document.getElementById('drawer-btn');
   const open=sb.classList.toggle('open');
   btn.textContent=open?'✕ Close':'≡ Flows';
 }
-// tap handle bar to close
 document.querySelector('.sb-head').addEventListener('click',function(){
   if(window.innerWidth<=768) toggleDrawer();
 });
