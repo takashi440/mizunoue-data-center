@@ -353,7 +353,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx044_Lz32U4iWo3dvQ
 let locations={}, flows=[], maxCount=1, minCount=0, presence={}, presenceMax=1;
 
 // ── WEATHER ──────────────────────────────────
-let weather={code:null,temp:null,label:'',emoji:'☁️',palette:'cloudy'};
+let weather={code:null,temp:null,label:'',emoji:'☁️',palette:'cloudy',wind:0,humidity:60};
 
 function wmoToPalette(code){
   if(code===0||code===1)           return{palette:'sunny',  emoji:'☀️',  label:'Clear'};
@@ -386,24 +386,29 @@ async function fetchWeather(date){
     const today = jst.toISOString().slice(0,10);
     const isToday = !date || date === today;
 
-    let code, temp;
+    let code, temp, wind=0, humidity=60;
     if(isToday){
-      const res=await fetch('https://api.open-meteo.com/v1/forecast?latitude=34.7617&longitude=137.3870&current=weathercode,temperature_2m&timezone=Asia/Tokyo');
+      const res=await fetch('https://api.open-meteo.com/v1/forecast?latitude=34.7617&longitude=137.3870&current=weathercode,temperature_2m,windspeed_10m,relativehumidity_2m&timezone=Asia/Tokyo');
       const json=await res.json();
       code=json.current.weathercode;
       temp=json.current.temperature_2m;
+      wind=json.current.windspeed_10m??0;
+      humidity=json.current.relativehumidity_2m??60;
     } else {
-      const res=await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=34.7617&longitude=137.3870&start_date=${date}&end_date=${date}&hourly=weathercode,temperature_2m&timezone=Asia/Tokyo`);
+      const res=await fetch(`https://archive-api.open-meteo.com/v1/archive?latitude=34.7617&longitude=137.3870&start_date=${date}&end_date=${date}&hourly=weathercode,temperature_2m,windspeed_10m,relativehumidity_2m&timezone=Asia/Tokyo`);
       const json=await res.json();
       const idx=12;
       code=json.hourly.weathercode[idx];
       temp=json.hourly.temperature_2m[idx];
+      wind=json.hourly.windspeed_10m?.[idx]??0;
+      humidity=json.hourly.relativehumidity_2m?.[idx]??60;
     }
 
     const info=wmoToPalette(code);
-    weather={code,temp,label:info.label,emoji:info.emoji,palette:info.palette};
+    weather={code,temp,label:info.label,emoji:info.emoji,palette:info.palette,wind,humidity};
     const badge=document.getElementById('weatherBadge');
-    if(badge) badge.textContent=`${info.emoji} ${info.label} ${temp !== null ? temp+'°C' : ''}`;
+    const windStr = wind > 0 ? ` 💨${wind}m/s` : '';
+    if(badge) badge.textContent=`${info.emoji} ${info.label} ${temp !== null ? temp+'°C' : ''}${windStr}`;
     updateLegendColors();
   }catch(e){ console.warn('Weather fetch failed',e); }
 }
@@ -654,7 +659,16 @@ new p5(function(s){
         else{              const u = (t - .75) / .25;  cr = Math.round(80 + u * 120); cg = Math.round(255 - u * 40); cb = Math.round(55 - u * 40); }
         this.r = cr; this.g = cg; this.b = cb;
       }
-      this.speed=isStaying(flow.distance)?s.random(.003,.007):s.random(.009,.018);
+      this.speed=isStaying(flow.distance)
+        ? s.random(.003,.007)   // Staying は風の影響小
+        : s.random(.009,.018) * (1 + Math.min(weather.wind/25,1) * 0.7); // Passing は風で加速
+
+      // 湿度によるくすみ（40%基準、100%で最大40%グレー寄り）
+      const humidFactor = Math.max(0, (weather.humidity - 40) / 60) * 0.4;
+      const gray = (this.r + this.g + this.b) / 3;
+      this.r = Math.round(this.r + (gray - this.r) * humidFactor);
+      this.g = Math.round(this.g + (gray - this.g) * humidFactor);
+      this.b = Math.round(this.b + (gray - this.b) * humidFactor);
       // ★ HYBRID sz: v1とv2の中間
       this.sz=1.5+r*4.5; this.jit=s.random(-.0004,.0004);
     }
