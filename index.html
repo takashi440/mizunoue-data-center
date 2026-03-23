@@ -173,7 +173,7 @@ header {
 
 /* LEAFLET */
 .leaflet-tile { filter:invert(1) hue-rotate(180deg) brightness(.75) saturate(.4); }
-.leaflet-top.leaflet-left { top:210px; left:14px; }
+.leaflet-top.leaflet-left { top:250px; left:14px; }
 
 /* DRAWER TOGGLE (mobile only) */
 #drawer-btn {
@@ -288,6 +288,8 @@ header {
       <div class="tick-row"><span class="tick-key">Detected Nodes</span><span><span class="tick-num" id="tNodes">—</span><span class="tick-unit">pts</span></span></div>
       <div class="tick-row"><span class="tick-key">Active Flows</span><span><span class="tick-num" id="tFlows">—</span><span class="tick-unit">routes</span></span></div>
       <div class="tick-row"><span class="tick-key">Staying Rate</span><span><span class="tick-num" id="tStay">—</span><span class="tick-unit">%</span></span></div>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin:6px 0 5px"></div>
+      <div class="tick-row"><span class="tick-key">Shoutengai</span><span><span class="tick-num" id="tShoutengai">—</span><span class="tick-unit">pax</span></span></div>
     </div>
 
     <!-- Top route -->
@@ -624,6 +626,8 @@ function updateStats(){
   animCount($('tNodes'),Object.keys(presence).length);
   animCount($('tFlows'),flows.length);
   animCount($('tStay'),stayR);
+  const shoutengaiV=Object.entries(presence).filter(([k])=>k.includes('棟')).reduce((s,[,p])=>s+p.count,0);
+  animCount($('tShoutengai'),shoutengaiV);
 
   if(flows.length){
     const top=[...flows].sort((a,b)=>b.count-a.count)[0];
