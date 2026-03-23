@@ -835,7 +835,7 @@ function initMap(){
     const sz=Math.round(28+ratio*24);
     const br=Math.round(100-ratio*100),bg=Math.round(100-ratio*60),bb=Math.round(120+ratio*135);
     const bc=pr.count===0?'#555566':`rgb(${br},${bg},${bb})`;
-    const lbl=name.replace('棟','').replace('ひとなる図書館','Lib');
+    const lbl=name.replace('棟','').replace('ひとなる図書館','Lib').replace('まちなか','');
     const icon=L.divIcon({
       html:`<div class="custom-marker" style="width:${sz}px;height:${sz}px;font-size:${Math.max(9,sz*.33)}px;border-color:${bc};box-shadow:0 0 16px ${bc}99,0 0 4px ${bc};">${lbl}</div>`,
       iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],className:'',
