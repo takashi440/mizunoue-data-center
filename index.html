@@ -237,6 +237,16 @@ body.exhibition .sidebar { display:none; }
 body.exhibition #panel-ticker { display:none; }
 body.exhibition #panel-top    { display:none; }
 body.exhibition #panel-leg    { display:none; }
+body.exhibition .leaflet-control-attribution { display:none; }
+body.exhibition .leaflet-control-zoom a {
+  background: rgba(10,14,26,0.5) !important;
+  color: rgba(255,255,255,0.25) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+body.exhibition .leaflet-control-zoom a:hover {
+  background: rgba(10,14,26,0.8) !important;
+  color: rgba(255,255,255,0.6) !important;
+}
 body.exhibition #exit-exhibition {
   display:flex !important;
 }
@@ -1300,6 +1310,10 @@ function toggleLoop(){
 
 function enterExhibition(){
   document.body.classList.add('exhibition');
+  setTimeout(()=>{
+    if(window.p5sketch) window.p5sketch.windowResized();
+    if(typeof leafletMap !== 'undefined') leafletMap.invalidateSize();
+  }, 50);
   if(!isPlaying) startPlay();
 }
 
