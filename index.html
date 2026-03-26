@@ -1177,8 +1177,8 @@ function startPlay(){
   isPlaying=true;
   document.getElementById('playBtn').textContent='⏸';
   let h = currentHour===-1 ? 0 : currentHour;
-  const hours = [...new Set(allFlows.map(f=>f.hour))].sort((a,b)=>a-b);
-  if(hours.length===0){stopPlay();return;}
+  const hours = Array.from({length:24},(_,i)=>i);
+  if(allFlows.length===0){stopPlay();return;}
 
   function tick(){
     if(!isPlaying) return;
@@ -1191,8 +1191,9 @@ function startPlay(){
     document.getElementById('timeModeHour').classList.add('active');
     const next = hours[idx+1];
     if(next===undefined){ stopPlay(); return; }
+    const hasData = allFlows.some(f=>f.hour===h);
     h = next;
-    playTimer = setTimeout(tick, 60000);
+    playTimer = setTimeout(tick, hasData ? 90000 : 30000);
   }
   tick();
 }
