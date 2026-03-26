@@ -231,6 +231,26 @@ header {
   .leaflet-top.leaflet-left { top:auto; bottom:76px; left:10px; }
   #drawer-btn { display:block; }
 }
+/* EXHIBITION MODE */
+body.exhibition header  { display:none; }
+body.exhibition .sidebar { display:none; }
+body.exhibition #panel-ticker { display:none; }
+body.exhibition #panel-top    { display:none; }
+body.exhibition #panel-leg    { display:none; }
+body.exhibition #exit-exhibition {
+  display:flex !important;
+}
+#exit-exhibition {
+  display:none;
+  position:fixed; top:12px; right:12px; z-index:9999;
+  gap:8px;
+}
+#exit-exhibition button {
+  background:rgba(10,14,26,0.85); border:1px solid rgba(255,100,100,0.3);
+  color:var(--sub); font-family:'Space Mono',monospace; font-size:9px;
+  padding:5px 10px; border-radius:5px; cursor:pointer; letter-spacing:.08em;
+}
+
 .custom-marker { display:flex; align-items:center; justify-content:center; border-radius:50%; border:2px solid #ff6464; background:rgba(0,0,8,.85); color:#fff; font-family:'Space Mono',monospace; font-weight:700; cursor:pointer; }
 .leaflet-popup-content-wrapper { background:rgba(10,14,26,.96); border:1px solid rgba(255,100,100,.35); border-radius:6px; color:var(--txt); font-family:'Inter',sans-serif; box-shadow:0 4px 24px rgba(0,0,0,.5); }
 .leaflet-popup-tip { background:rgba(10,14,26,.96); }
@@ -293,7 +313,14 @@ header {
     <button class="tone-btn active" data-tone="ambient" onclick="audioEngine.setToneMode('ambient')" style="padding:4px 9px;border-radius:4px;border:none;background:rgba(68,255,136,0.15);color:#44ff88;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Ambient</button>
     <button class="tone-btn"        data-tone="click"   onclick="audioEngine.setToneMode('click')"   style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Click</button>
   </div>
+  <button id="loopBtn" onclick="toggleLoop()" style="background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--sub);font-family:'Space Mono',monospace;font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;letter-spacing:.08em;transition:all .2s;">⟳ Loop</button>
+  <button onclick="enterExhibition()" style="background:transparent;border:1px solid rgba(255,100,100,0.25);color:var(--red);font-family:'Space Mono',monospace;font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;letter-spacing:.08em;transition:all .2s;">⬛ Exhibition</button>
 </header>
+
+<div id="exit-exhibition">
+  <button onclick="exitExhibition()">✕ Exit</button>
+  <button onclick="toggleLoop()" id="loopBtnEx">⟳ Loop: OFF</button>
+</div>
 
 <div id="loading" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,26,.95);border:1px solid rgba(255,100,100,.4);padding:16px 28px;border-radius:8px;color:#ff6464;font-family:'Space Mono',monospace;font-size:13px;z-index:9999;letter-spacing:.1em;"></div>
 
@@ -449,6 +476,7 @@ let allFlows=[], allPresence=[];
 let currentHour=-1;
 let isPlaying=false;
 let playTimer=null;
+let loopPlay=false;
 const leafletMarkers=[], sideItems=[];
 
 const $=id=>document.getElementById(id);
@@ -1253,7 +1281,10 @@ function startPlay(){
     document.querySelectorAll('.time-mode-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('timeModeHour').classList.add('active');
     const next = hours[idx+1];
-    if(next===undefined){ stopPlay(); return; }
+    if(next===undefined){
+      if(loopPlay){ h = hours[0]; playTimer = setTimeout(tick, 1000); return; }
+      stopPlay(); return;
+    }
     const hasData = allFlows.some(f=>f.hour===h);
     h = next;
     playTimer = setTimeout(tick, hasData ? 90000 : 30000);
@@ -1266,6 +1297,24 @@ function stopPlay(){
   document.getElementById('playBtn').textContent='▶';
   if(playTimer){ clearTimeout(playTimer); playTimer=null; }
   document.getElementById('timeModeAll').click();
+}
+
+function toggleLoop(){
+  loopPlay=!loopPlay;
+  const label = loopPlay ? '⟳ Loop: ON' : '⟳ Loop';
+  const btn = document.getElementById('loopBtn');
+  const btnEx = document.getElementById('loopBtnEx');
+  if(btn){ btn.textContent=label; btn.style.color=loopPlay?'var(--red)':'var(--sub)'; btn.style.borderColor=loopPlay?'rgba(255,100,100,0.5)':'rgba(255,255,255,0.08)'; }
+  if(btnEx){ btnEx.textContent=loopPlay?'⟳ Loop: ON':'⟳ Loop: OFF'; btnEx.style.color=loopPlay?'var(--red)':'var(--sub)'; }
+}
+
+function enterExhibition(){
+  document.body.classList.add('exhibition');
+  if(!isPlaying) startPlay();
+}
+
+function exitExhibition(){
+  document.body.classList.remove('exhibition');
 }
 
 function toggleDrawer(){
