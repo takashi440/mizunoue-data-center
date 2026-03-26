@@ -187,13 +187,21 @@ header {
 }
 
 /* RESPONSIVE */
-@media (max-width: 768px) {
+@media (max-width: 1100px) {
   .hstat-group { display:none; }
-  header { padding:7px 12px; gap:10px; }
+}
+@media (max-width: 900px) {
+  #weatherBadge { display:none; }
+  #soundBtn { padding:4px 8px; font-size:9px; }
+}
+@media (max-width: 768px) {
+  header { padding:7px 12px; gap:8px; overflow:hidden; }
   .logo-text { font-size:10px; }
   .logo-sub  { display:none; }
   .date-badge { font-size:9px; padding:3px 8px; }
   .toggle-btn { padding:5px 9px; font-size:10px; }
+  #soundBtn { font-size:9px; padding:3px 7px; }
+  #dateBadge { display:none; }
 
   .sidebar {
     position:absolute; bottom:0; left:0; right:0;
@@ -272,6 +280,13 @@ header {
   </div>
   <div class="date-badge" id="weatherBadge" style="min-width:120px;text-align:center;">☁️ —</div>
   <div class="date-badge" id="dateBadge">—</div>
+  <button id="soundBtn" onclick="toggleSound()" style="background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--sub);font-family:'Space Mono',monospace;font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;letter-spacing:.08em;transition:all .2s;">🔇 Sound</button>
+  <div id="scaleBtnGroup" style="display:flex;gap:3px;background:rgba(255,255,255,0.04);padding:3px;border-radius:6px;border:1px solid rgba(255,255,255,0.07);">
+    <button class="scale-btn active" data-scale="lydian"     onclick="audioEngine.setScale('lydian')"     style="padding:4px 9px;border-radius:4px;border:none;background:rgba(68,255,136,0.15);color:#44ff88;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Lydian</button>
+    <button class="scale-btn"        data-scale="wholetone"  onclick="audioEngine.setScale('wholetone')"  style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Whole</button>
+    <button class="scale-btn"        data-scale="overtone"   onclick="audioEngine.setScale('overtone')"   style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Over</button>
+    <button class="scale-btn"        data-scale="pentatonic" onclick="audioEngine.setScale('pentatonic')" style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Penta</button>
+  </div>
 </header>
 
 <div id="loading" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,26,.95);border:1px solid rgba(255,100,100,.4);padding:16px 28px;border-radius:8px;color:#ff6464;font-family:'Space Mono',monospace;font-size:13px;z-index:9999;letter-spacing:.1em;"></div>
@@ -665,6 +680,150 @@ dc.onAdd=function(){
 };
 dc.addTo(leafletMap);
 
+// ── AUDIO ENGINE ─────────────────────────────
+const audioEngine = (() => {
+  let ctx = null, masterGain = null, reverbNode = null, reverbGain = null;
+  let enabled = false, lastSoundTime = 0;
+  const MIN_INTERVAL = 55;
+
+  const SCALES = {
+    lydian:    [65.4,73.4,82.4,92.5,98,110,123.5,130.8,146.8,164.8,185,196,220,246.9,261.6], // C Lydian（浮遊感）
+    wholetone: [65.4,73.4,82.4,92.5,103.8,116.5,130.8,146.8,164.8,185,207.7,233.1,261.6],    // 全音音階（夢）
+    overtone:  [55,110,165,220,275,330,385,440,495,550,660,770],                               // 倍音列（最アンビエント）
+    pentatonic:[110,123.5,138.6,165,185,220,247,277.2,330,370,440,493.9,554.4,659.3,739.99],  // 元のペンタトニック
+  };
+  const SCALE_NAMES = ['lydian','wholetone','overtone','pentatonic'];
+  const SCALE_LABELS = { lydian:'Lydian', wholetone:'Whole Tone', overtone:'Overtone', pentatonic:'Pentatonic' };
+  let scaleIdx = 0; // デフォルト: Lydian
+
+  function currentScale(){ return SCALES[SCALE_NAMES[scaleIdx]]; }
+  function nextScale(){
+    scaleIdx = (scaleIdx + 1) % SCALE_NAMES.length;
+    setScale(SCALE_NAMES[scaleIdx]);
+  }
+
+  function setScale(name){
+    scaleIdx = SCALE_NAMES.indexOf(name);
+    document.querySelectorAll('.scale-btn').forEach(b => {
+      const on = b.dataset.scale === name;
+      b.style.background = on ? 'rgba(68,255,136,0.15)' : 'transparent';
+      b.style.color = on ? '#44ff88' : 'var(--sub)';
+    });
+  }
+
+  function strHash(s){
+    let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))&0xffff; return h;
+  }
+
+  function makeReverb(actx, dur=2.5){
+    const sr=actx.sampleRate, len=Math.round(sr*dur);
+    const buf=actx.createBuffer(2,len,sr);
+    for(let c=0;c<2;c++){
+      const ch=buf.getChannelData(c);
+      for(let i=0;i<len;i++) ch[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.2);
+    }
+    const conv=actx.createConvolver(); conv.buffer=buf; return conv;
+  }
+
+  function init(){
+    if(ctx) return;
+    ctx=new(window.AudioContext||window.webkitAudioContext)();
+    masterGain=ctx.createGain(); masterGain.gain.value=0.3;
+    masterGain.connect(ctx.destination);
+    reverbNode=makeReverb(ctx,2.5);
+    reverbGain=ctx.createGain(); reverbGain.gain.value=0.45;
+    reverbNode.connect(reverbGain); reverbGain.connect(masterGain);
+  }
+
+  function spawn(flow){
+    if(!enabled||!ctx) return;
+    const now=performance.now();
+    if(now-lastSoundTime<MIN_INTERVAL) return;
+    lastSoundTime=now;
+
+    const staying=isStaying(flow.distance);
+
+    // ── 天気パラメータの正規化 ──────────────────
+    const windF   = Math.min(weather.wind / 20, 1);          // 0〜1（20m/sで最大）
+    const humidF  = Math.max(0, (weather.humidity - 40) / 60); // 0〜1（湿度40〜100%）
+    const tempF   = weather.temp !== null
+      ? Math.max(0, Math.min(1, (weather.temp + 5) / 45))    // -5〜40℃を0〜1に
+      : 0.5;
+
+    // ── 音程：気温で微調整（高温→少し明るく） ──
+    const scale = currentScale();
+    const noteIdx = strHash(flow.from+flow.to) % scale.length;
+    const baseFreq = scale[noteIdx];
+    const tempDetune = (tempF - 0.5) * 30;                   // -15〜+15cent
+    const freq = staying ? baseFreq : baseFreq * 2;
+
+    // ── 音量 ────────────────────────────────────
+    const r = maxCount > minCount ? (flow.count - minCount) / (maxCount - minCount) : 0.5;
+    const vol = staying ? 0.07 + r * 0.13 : 0.03 + r * 0.07;
+
+    // ── decay：風が強いとpassingが短く消える ────
+    const decayBase = staying ? 2.0 : 0.35;
+    const decay = staying
+      ? decayBase                                             // stayingは風の影響なし
+      : decayBase * (1 - windF * 0.55);                      // 風速20m/s→45%短縮
+
+    // ── デチューン：風が強いと揺らぎが大きく ──
+    const detuneRange = staying ? 4 : 8 + windF * 20;        // 風強→最大28centの揺らぎ
+
+    // ── リバーブ深さ：湿度で変化 ────────────────
+    const reverbMix = staying ? 0.35 + humidF * 0.45 : 0;    // 湿度高→リバーブ深く
+
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    // パレット別の波形変化（storm→sawtooth、sunny→sineに近く）
+    let waveType = staying ? 'sine' : 'triangle';
+    if(!staying && weather.palette === 'storm') waveType = 'sawtooth';
+
+    osc.type = waveType;
+    osc.frequency.value = freq;
+    osc.detune.value = (Math.random() - 0.5) * detuneRange + tempDetune;
+
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+
+    if(staying && reverbMix > 0){
+      const rvGain = ctx.createGain();
+      rvGain.gain.value = reverbMix;
+      gain.connect(rvGain);
+      rvGain.connect(reverbNode);
+    }
+
+    osc.start(t); osc.stop(t + decay + 0.05);
+  }
+
+  function toggle(){
+    enabled=!enabled;
+    if(enabled&&!ctx) init();
+    if(ctx) ctx.resume();
+    return enabled;
+  }
+
+  return{spawn,toggle,nextScale,setScale};
+})();
+
+function toggleSound(){
+  const on=audioEngine.toggle();
+  const btn=document.getElementById('soundBtn');
+  btn.textContent=on?'🔊 Sound':'🔇 Sound';
+  btn.style.color=on?'#44ff88':'var(--sub)';
+  btn.style.borderColor=on?'rgba(68,255,136,0.4)':'rgba(255,255,255,0.08)';
+}
+// `/`キーでスケール切り替え
+document.addEventListener('keydown', e => {
+  if(e.key === '/') audioEngine.nextScale();
+});
+
 // p5.js
 let needsClear=false;
 leafletMap.on('movestart zoomstart',()=>{needsClear=true;});
@@ -709,6 +868,7 @@ new p5(function(s){
       this.g = Math.round(this.g + (gray - this.g) * humidFactor);
       this.b = Math.round(this.b + (gray - this.b) * humidFactor);
       this.sz=1.5+r*4.5; this.jit=s.random(-.0004,.0004);
+      audioEngine.spawn(flow);
     }
     pos(){
       const fL=locations[this.flow.from],tL=locations[this.flow.to]; if(!fL||!tL)return null;
