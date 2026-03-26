@@ -1192,7 +1192,7 @@ function startPlay(){
     const next = hours[idx+1];
     if(next===undefined){ stopPlay(); return; }
     h = next;
-    playTimer = setTimeout(tick, 3000);
+    playTimer = setTimeout(tick, 60000);
   }
   tick();
 }
