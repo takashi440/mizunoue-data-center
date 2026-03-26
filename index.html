@@ -685,8 +685,9 @@ dc.addTo(leafletMap);
 // ── AUDIO ENGINE ─────────────────────────────
 const audioEngine = (() => {
   let ctx = null, masterGain = null, reverbNode = null, reverbGain = null;
-  let enabled = false, lastSoundTime = 0;
-  const MIN_INTERVAL = 55;
+  let enabled = false;
+  let activeVoices = 0;
+  const MAX_VOICES = 24; // 同時発音数の上限
 
   const SCALES = {
     lydian:    [65.4,73.4,82.4,92.5,98,110,123.5,130.8,146.8,164.8,185,196,220,246.9,261.6], // C Lydian（浮遊感）
@@ -730,9 +731,7 @@ const audioEngine = (() => {
 
   function spawn(flow){
     if(!enabled||!ctx) return;
-    const now=performance.now();
-    if(now-lastSoundTime<MIN_INTERVAL) return;
-    lastSoundTime=now;
+    if(activeVoices >= MAX_VOICES) return;
 
     const staying=isStaying(flow.distance);
 
@@ -743,56 +742,62 @@ const audioEngine = (() => {
       ? Math.max(0, Math.min(1, (weather.temp + 5) / 45))    // -5〜40℃を0〜1に
       : 0.5;
 
-    // ── 音程：気温で微調整（高温→少し明るく） ──
+    // ── 拠点固有の音程（loc_idのハッシュ → 常に同じ拠点=同じ音） ──
     const scale = currentScale();
-    const noteIdx = strHash(flow.from+flow.to) % scale.length;
-    const baseFreq = scale[noteIdx];
-    const tempDetune = (tempF - 0.5) * 30;                   // -15〜+15cent
-    const freq = staying ? baseFreq : baseFreq * 2;
+    const fromFreq = scale[strHash(flow.from) % scale.length]; // 出発拠点の音
+    const toFreq   = scale[strHash(flow.to)   % scale.length]; // 到着拠点の音
+    const tempDetune = (tempF - 0.5) * 30;
 
     // ── 音量 ────────────────────────────────────
     const r = maxCount > minCount ? (flow.count - minCount) / (maxCount - minCount) : 0.5;
-    const vol = staying ? 0.07 + r * 0.13 : 0.03 + r * 0.07;
+    const vol = staying ? 0.05 + r * 0.08 : 0.02 + r * 0.04; // 全体的に音量を下げる
 
-    // ── decay：風が強いとpassingが短く消える ────
-    const decayBase = staying ? 2.0 : 0.35;
+    // ── decay：プチプチ感のために短く ────────────
+    const decayBase = staying ? 1.2 : 0.12;                   // passing は0.12sで即消え
     const decay = staying
-      ? decayBase                                             // stayingは風の影響なし
-      : decayBase * (1 - windF * 0.55);                      // 風速20m/s→45%短縮
+      ? decayBase
+      : decayBase * (1 - windF * 0.4);
 
-    // ── デチューン：風が強いと揺らぎが大きく ──
-    const detuneRange = staying ? 4 : 8 + windF * 20;        // 風強→最大28centの揺らぎ
+    // ── デチューン：控えめに ──────────────────────
+    const detuneRange = staying ? 3 : 4 + windF * 8;          // 割れ防止で小さく
 
     // ── リバーブ深さ：湿度で変化 ────────────────
-    const reverbMix = staying ? 0.35 + humidF * 0.45 : 0;    // 湿度高→リバーブ深く
+    const reverbMix = staying ? 0.3 + humidF * 0.35 : 0;
 
+    // ── 拠点ごとの波形（sine/triangleのみ・sawtooth廃止） ──
+    function locWave(locId){
+      const h = strHash(locId) % 2;
+      return staying
+        ? 'sine'                                               // staying は常にsine
+        : h === 0 ? 'sine' : 'triangle';                      // passing は拠点で sine/triangle
+    }
+    const fromWave = locWave(flow.from);
+    const toWave   = locWave(flow.to);
+
+    // ── 出発音（immediately） ────────────────────
     const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    // パレット別の波形変化（storm→sawtooth、sunny→sineに近く）
-    let waveType = staying ? 'sine' : 'triangle';
-    if(!staying && weather.palette === 'storm') waveType = 'sawtooth';
-
-    osc.type = waveType;
-    osc.frequency.value = freq;
-    osc.detune.value = (Math.random() - 0.5) * detuneRange + tempDetune;
-
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(vol, t + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
-
-    osc.connect(gain);
-    gain.connect(masterGain);
-
-    if(staying && reverbMix > 0){
-      const rvGain = ctx.createGain();
-      rvGain.gain.value = reverbMix;
-      gain.connect(rvGain);
-      rvGain.connect(reverbNode);
+    function playNote(freq, startTime, vol, decay, detune, waveType){
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = waveType;
+      osc.frequency.value = staying ? freq : freq * 2;
+      osc.detune.value = (Math.random() - 0.5) * detuneRange + tempDetune + detune;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.008); // 鋭いattack
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      if(staying && reverbMix > 0){
+        const rv = ctx.createGain(); rv.gain.value = reverbMix;
+        gain.connect(rv); rv.connect(reverbNode);
+      }
+      activeVoices++;
+      osc.onended = () => { activeVoices = Math.max(0, activeVoices - 1); };
+      osc.start(startTime); osc.stop(startTime + decay + 0.05);
     }
 
-    osc.start(t); osc.stop(t + decay + 0.05);
+    playNote(fromFreq, t,                vol * 0.9, decay,        0, fromWave); // 出発：すぐ
+    playNote(toFreq,   t + decay * 0.85, vol * 0.7, decay * 0.6, 5, toWave);  // 到着：終盤
   }
 
   // ── ENO PHASE LOOPS ──────────────────────────
