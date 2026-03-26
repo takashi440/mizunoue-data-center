@@ -704,15 +704,6 @@ const audioEngine = (() => {
     setScale(SCALE_NAMES[scaleIdx]);
   }
 
-  function setScale(name){
-    scaleIdx = SCALE_NAMES.indexOf(name);
-    document.querySelectorAll('.scale-btn').forEach(b => {
-      const on = b.dataset.scale === name;
-      b.style.background = on ? 'rgba(68,255,136,0.15)' : 'transparent';
-      b.style.color = on ? '#44ff88' : 'var(--sub)';
-    });
-  }
-
   function strHash(s){
     let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))&0xffff; return h;
   }
@@ -804,11 +795,70 @@ const audioEngine = (() => {
     osc.start(t); osc.stop(t + decay + 0.05);
   }
 
+  // ── ENO PHASE LOOPS ──────────────────────────
+  // 異なる間隔で同じ音列を繰り返す → 少しずつズレて無限に変化するテクスチャ
+  let phaseTimers = [];
+  const PHASE_INTERVALS  = [13700, 17300, 22100, 28700]; // ms（素数的な間隔でズレが最大化）
+  const PHASE_NOTE_IDX   = [0, 2, 4, 6];                 // スケールの疎な音程を使う
+
+  function startPhaseLoops(){
+    stopPhaseLoops();
+    const scale = currentScale();
+    PHASE_INTERVALS.forEach((interval, i) => {
+      const freq = scale[PHASE_NOTE_IDX[i] % scale.length];
+
+      function playVoice(){
+        if(!enabled || !ctx) return;
+        const t = ctx.currentTime;
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const rv   = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        osc.detune.value = (Math.random() - 0.5) * 4; // 微妙な揺らぎ
+
+        // ゆっくり立ち上がり → 長く残響
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.055, t + 2.0);   // 2秒で立ち上がる
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 7.0); // 7秒で消える
+
+        rv.gain.value = 0.6;
+        osc.connect(gain);
+        gain.connect(masterGain);
+        gain.connect(rv); rv.connect(reverbNode); // 常にリバーブ
+
+        osc.start(t); osc.stop(t + 7.2);
+        phaseTimers[i] = setTimeout(playVoice, interval);
+      }
+
+      // 各ボイスをずらして開始（最初のフェーズ差を作る）
+      phaseTimers[i] = setTimeout(playVoice, i * 800);
+    });
+  }
+
+  function stopPhaseLoops(){
+    phaseTimers.forEach(id => clearTimeout(id));
+    phaseTimers = [];
+  }
+
   function toggle(){
     enabled=!enabled;
     if(enabled&&!ctx) init();
     if(ctx) ctx.resume();
+    if(enabled) startPhaseLoops();
+    else stopPhaseLoops();
     return enabled;
+  }
+
+  function setScale(name){
+    scaleIdx = SCALE_NAMES.indexOf(name);
+    document.querySelectorAll('.scale-btn').forEach(b => {
+      const on = b.dataset.scale === name;
+      b.style.background = on ? 'rgba(68,255,136,0.15)' : 'transparent';
+      b.style.color = on ? '#44ff88' : 'var(--sub)';
+    });
+    if(enabled) startPhaseLoops(); // スケール変更時にループを再起動
   }
 
   return{spawn,toggle,nextScale,setScale};
