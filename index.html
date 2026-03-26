@@ -289,6 +289,10 @@ header {
     <button class="scale-btn"        data-scale="overtone"   onclick="audioEngine.setScale('overtone')"   style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Over</button>
     <button class="scale-btn"        data-scale="pentatonic" onclick="audioEngine.setScale('pentatonic')" style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Penta</button>
   </div>
+  <div id="toneBtnGroup" style="display:flex;gap:3px;background:rgba(255,255,255,0.04);padding:3px;border-radius:6px;border:1px solid rgba(255,255,255,0.07);">
+    <button class="tone-btn active" data-tone="ambient" onclick="audioEngine.setToneMode('ambient')" style="padding:4px 9px;border-radius:4px;border:none;background:rgba(68,255,136,0.15);color:#44ff88;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Ambient</button>
+    <button class="tone-btn"        data-tone="click"   onclick="audioEngine.setToneMode('click')"   style="padding:4px 9px;border-radius:4px;border:none;background:transparent;color:var(--sub);font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;transition:all .2s;">Click</button>
+  </div>
 </header>
 
 <div id="loading" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,14,26,.95);border:1px solid rgba(255,100,100,.4);padding:16px 28px;border-radius:8px;color:#ff6464;font-family:'Space Mono',monospace;font-size:13px;z-index:9999;letter-spacing:.1em;"></div>
@@ -698,6 +702,7 @@ const audioEngine = (() => {
   const SCALE_NAMES = ['lydian','wholetone','overtone','pentatonic'];
   const SCALE_LABELS = { lydian:'Lydian', wholetone:'Whole Tone', overtone:'Overtone', pentatonic:'Pentatonic' };
   let scaleIdx = 0; // デフォルト: Lydian
+  let toneMode = 'ambient'; // 'ambient' | 'click'
 
   function currentScale(){ return SCALES[SCALE_NAMES[scaleIdx]]; }
   function nextScale(){
@@ -796,6 +801,39 @@ const audioEngine = (() => {
       osc.start(startTime); osc.stop(startTime + decay + 0.05);
     }
 
+    if(toneMode === 'click'){
+      // 池田亮二スタイル: ノイズバースト + 高周波sine
+      const dur = staying ? 0.004 : 0.002;
+      const bufSize = Math.ceil(ctx.sampleRate * dur);
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for(let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(vol * 2.5, t);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(ng); ng.connect(masterGain);
+      activeVoices++;
+      src.onended = () => { activeVoices = Math.max(0, activeVoices - 1); };
+      src.start(t);
+
+      const cFreq = staying
+        ? 2000 + strHash(flow.from) % 4000
+        : 7000 + strHash(flow.from) % 11000;
+      const cosc = ctx.createOscillator();
+      const cg = ctx.createGain();
+      cosc.type = 'sine';
+      cosc.frequency.value = cFreq;
+      cg.gain.setValueAtTime(vol * 1.2, t);
+      cg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 1.5);
+      cosc.connect(cg); cg.connect(masterGain);
+      activeVoices++;
+      cosc.onended = () => { activeVoices = Math.max(0, activeVoices - 1); };
+      cosc.start(t); cosc.stop(t + dur * 1.5 + 0.001);
+      return;
+    }
+
     playNote(fromFreq, t,                vol * 0.9, decay,        0, fromWave); // 出発：すぐ
     playNote(toFreq,   t + decay * 0.85, vol * 0.7, decay * 0.6, 5, toWave);  // 到着：終盤
   }
@@ -815,6 +853,21 @@ const audioEngine = (() => {
       function playVoice(){
         if(!enabled || !ctx) return;
         const t = ctx.currentTime;
+
+        if(toneMode === 'click'){
+          const cFreq = [6000, 9000, 12000, 16000][i];
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = cFreq + (Math.random() - 0.5) * 1000;
+          g.gain.setValueAtTime(0.04, t);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.006);
+          osc.connect(g); g.connect(masterGain);
+          osc.start(t); osc.stop(t + 0.008);
+          phaseTimers[i] = setTimeout(playVoice, interval);
+          return;
+        }
+
         const osc  = ctx.createOscillator();
         const gain = ctx.createGain();
         const rv   = ctx.createGain();
@@ -863,10 +916,20 @@ const audioEngine = (() => {
       b.style.background = on ? 'rgba(68,255,136,0.15)' : 'transparent';
       b.style.color = on ? '#44ff88' : 'var(--sub)';
     });
-    if(enabled) startPhaseLoops(); // スケール変更時にループを再起動
+    if(enabled) startPhaseLoops();
   }
 
-  return{spawn,toggle,nextScale,setScale};
+  function setToneMode(mode){
+    toneMode = mode;
+    document.querySelectorAll('.tone-btn').forEach(b => {
+      const on = b.dataset.tone === mode;
+      b.style.background = on ? 'rgba(255,100,100,0.15)' : 'transparent';
+      b.style.color = on ? 'var(--red)' : 'var(--sub)';
+    });
+    if(enabled) startPhaseLoops();
+  }
+
+  return{spawn,toggle,nextScale,setScale,setToneMode};
 })();
 
 function toggleSound(){
@@ -1202,6 +1265,7 @@ function stopPlay(){
   isPlaying=false;
   document.getElementById('playBtn').textContent='▶';
   if(playTimer){ clearTimeout(playTimer); playTimer=null; }
+  document.getElementById('timeModeAll').click();
 }
 
 function toggleDrawer(){
