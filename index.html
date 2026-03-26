@@ -882,20 +882,6 @@ const audioEngine = (() => {
         if(!enabled || !ctx) return;
         const t = ctx.currentTime;
 
-        if(toneMode === 'click'){
-          const cFreq = [6000, 9000, 12000, 16000][i];
-          const osc = ctx.createOscillator();
-          const g = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.value = cFreq + (Math.random() - 0.5) * 1000;
-          g.gain.setValueAtTime(0.04, t);
-          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.006);
-          osc.connect(g); g.connect(masterGain);
-          osc.start(t); osc.stop(t + 0.008);
-          phaseTimers[i] = setTimeout(playVoice, interval);
-          return;
-        }
-
         const osc  = ctx.createOscillator();
         const gain = ctx.createGain();
         const rv   = ctx.createGain();
@@ -1296,7 +1282,11 @@ function stopPlay(){
   isPlaying=false;
   document.getElementById('playBtn').textContent='▶';
   if(playTimer){ clearTimeout(playTimer); playTimer=null; }
-  document.getElementById('timeModeAll').click();
+  document.querySelectorAll('.time-mode-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('timeModeAll').classList.add('active');
+  document.getElementById('hourSlider').value=-1;
+  applyHourFilter(-1);
+  initMap();
 }
 
 function toggleLoop(){
