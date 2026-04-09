@@ -410,6 +410,16 @@ body.exhibition #exit-exhibition {
 <script>
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbx044_Lz32U4iWo3dvQ1-7wp-OY8SQqf_DjgIhw_XtjRcof2JLW83JdRz1c9Xw6YZ81/exec';
 
+// ── XSS対策: APIデータをHTMLに展開する前にエスケープ ──
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let locations={}, flows=[], maxCount=1, minCount=0, presence={}, presenceMax=1;
 
 // ── WEATHER ──────────────────────────────────
@@ -635,9 +645,9 @@ function renderEventBadges(){
   strip.innerHTML = '';
   if(!todayEvents || todayEvents.length === 0) return;
   todayEvents.forEach(ev => {
-    const meta = EVENT_META[ev.title] || { emoji:'📌', color:'#aaaaaa', en:ev.title };
+    const meta = EVENT_META[ev.title] || { emoji:'📌', color:'#aaaaaa', en:escapeHTML(ev.title) };
     const locs = ev.locations ? ev.locations.split(',').map(l=>l.trim()) : [];
-    const locText = locs.length > 0 ? locs.map(l=>l.replace('棟','')).join('·') : '';
+    const locText = locs.length > 0 ? locs.map(l=>escapeHTML(l.replace('棟',''))).join('·') : '';
     const badge = document.createElement('div');
     badge.className = 'event-badge';
     badge.style.borderColor = meta.color + '66';
@@ -1145,12 +1155,12 @@ function initMap(){
     const bc=pr.count===0?'#555566':`rgb(${br},${bg},${bb})`;
     const lbl=name.replace('棟','').replace('ひとなる図書館','Lib').replace('まちなか','');
     const icon=L.divIcon({
-      html:`<div class="custom-marker" style="width:${sz}px;height:${sz}px;font-size:${Math.max(9,sz*.33)}px;border-color:${bc};box-shadow:0 0 16px ${bc}99,0 0 4px ${bc};">${lbl}</div>`,
+      html:`<div class="custom-marker" style="width:${sz}px;height:${sz}px;font-size:${Math.max(9,sz*.33)}px;border-color:${bc};box-shadow:0 0 16px ${bc}99,0 0 4px ${bc};">${escapeHTML(lbl)}</div>`,
       iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],className:'',
     });
     const spct=(st.out+st.in)>0?Math.round(pr.count/(st.out+st.in+pr.count)*100):0;
     const m=L.marker([pos.lat,pos.lng],{icon,pane:'tooltipPane'}).addTo(leafletMap).bindPopup(`
-      <div class="popup-title">${name}</div>
+      <div class="popup-title">${escapeHTML(name)}</div>
       <div class="popup-row">Visitors detected<span>${pr.count.toLocaleString()} pax</span></div>
       <div class="popup-row">Avg dwell time<span>${pr.avg_dwell} min</span></div>
       <div class="popup-row">Outbound<span>${st.out.toLocaleString()} pax</span></div>
@@ -1178,7 +1188,7 @@ function initMap(){
       <div class="flow-rank ${rc}">${rank+1}</div>
       <div class="flow-swatch" style="background:${c};box-shadow:0 0 5px ${c};"></div>
       <div class="flow-bwrap">
-        <div class="flow-route">${flow.from} → ${flow.to}</div>
+        <div class="flow-route">${escapeHTML(flow.from)} → ${escapeHTML(flow.to)}</div>
         <div class="flow-meta"><span>${flow.distance}m</span><span>${st?'🟠 Staying':'🔵 Passing'}</span></div>
         <div class="flow-bbg"><div class="flow-bar" style="width:0%;background:${c};"></div></div>
       </div>
