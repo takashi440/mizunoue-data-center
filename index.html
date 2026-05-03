@@ -963,9 +963,19 @@ function toggleSound(){
   btn.style.color=on?'#44ff88':'var(--sub)';
   btn.style.borderColor=on?'rgba(68,255,136,0.4)':'rgba(255,255,255,0.08)';
 }
-// `/`キーでスケール切り替え
 document.addEventListener('keydown', e => {
-  if(e.key === '/') audioEngine.nextScale();
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  switch(e.key.toLowerCase()) {
+    case 'e': document.body.classList.contains('exhibition') ? exitExhibition() : enterExhibition(); break;
+    case 's': toggleSound(); break;
+    case ' ': e.preventDefault(); isPlaying ? stopPlay() : startPlay(); break;
+    case 'l': toggleLoop(); break;
+    case 'a': audioEngine.setToneMode('ambient');
+              document.querySelectorAll('.tone-btn').forEach(b=>b.classList.toggle('active', b.dataset.tone==='ambient')); break;
+    case 'c': audioEngine.setToneMode('click');
+              document.querySelectorAll('.tone-btn').forEach(b=>b.classList.toggle('active', b.dataset.tone==='click')); break;
+    case '/': audioEngine.nextScale(); break;
+  }
 });
 
 // p5.js
