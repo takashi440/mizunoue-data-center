@@ -1246,12 +1246,12 @@ leafletMap.whenReady(async()=>{
     await fetchData(rd);
     initMap();
   });
-  setTimeout(() => leafletMap.invalidateSize(), 100);
+  [100, 300, 600, 1200].forEach(delay =>
+    setTimeout(() => leafletMap.invalidateSize(), delay)
+  );
 });
 
-window.addEventListener('resize', () => {
-  leafletMap.invalidateSize();
-});
+window.addEventListener('load', () => leafletMap.invalidateSize());
 
 // TIME SLIDER
 document.getElementById('hourSlider').addEventListener('input', function(){
