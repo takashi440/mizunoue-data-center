@@ -979,6 +979,10 @@ document.addEventListener('keydown', e => {
 });
 
 // p5.js
+window.addEventListener('resize', () => {
+  leafletMap.invalidateSize();
+});
+  
 let needsClear=false;
 leafletMap.on('movestart zoomstart',()=>{needsClear=true;});
 leafletMap.on('moveend  zoomend',  ()=>{needsClear=false;});
@@ -1242,6 +1246,11 @@ leafletMap.whenReady(async()=>{
     await fetchData(rd);
     initMap();
   });
+  setTimeout(() => leafletMap.invalidateSize(), 100);
+});
+
+window.addEventListener('resize', () => {
+  leafletMap.invalidateSize();
 });
 
 // TIME SLIDER
