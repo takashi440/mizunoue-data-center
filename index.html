@@ -710,8 +710,8 @@ function updateStats(){
 
 // LEAFLET
 const leafletMap=L.map('map',{center:[34.7617,137.3870],zoom:17});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap contributors © CARTO',subdomains:'abcd',maxZoom:19}).addTo(leafletMap);
-
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(leafletMap);
+  
 const dc=L.control({position:'topright'});
 dc.onAdd=function(){
   const d=L.DomUtil.create('div');
