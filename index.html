@@ -172,8 +172,11 @@ header {
 }
 
 /* LEAFLET */
-.leaflet-tile { filter:invert(1) hue-rotate(180deg) brightness(.5) contrast(.75) saturate(.3); opacity:.55; }
-.leaflet-top.leaflet-left { top:250px; left:14px; }
+/* .leaflet-tile { filter:invert(1) hue-rotate(180deg) brightness(.5) contrast(.75) saturate(.3); opacity:.55; } */
+/* 変更後（もっとダークに） */
+.leaflet-tile { filter:invert(1) hue-rotate(180deg) brightness(.35) contrast(.85) saturate(.25); opacity:.4; }
+  
+  .leaflet-top.leaflet-left { top:250px; left:14px; }
 
 /* DRAWER TOGGLE (mobile only) */
 #drawer-btn {
