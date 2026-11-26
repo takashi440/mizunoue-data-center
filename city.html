@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>水上ビル周辺 人の動き｜BLE計測</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+:root {
+  --surface: #fcfcfb;
+  --page: #f3f3f1;
+  --line: #e2e1dc;
+  --text: #0b0b0b;
+  --text2: #52514e;
+  --muted: #8a8984;
+  --near: #2a78d6;   /* 150m未満の移動 */
+  --far: #eb6834;    /* 150m以上の移動 */
+  --node: #3a3a37;
+  --bar: #b9b8b2;
+  --bar-on: #3a3a37;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--page); color: var(--text); font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif; font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 20px 24px 28px; }
+
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 2px solid var(--text); }
+h1 { font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+.sub { color: var(--text2); font-size: 13px; margin-top: 2px; }
+.ctrl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ctrl input[type=date] { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--text); }
+.ctrl button { font: inherit; padding: 6px 16px; border: 1px solid var(--text); border-radius: 6px; background: var(--text); color: #fff; cursor: pointer; }
+.ctrl button:hover { opacity: .85; }
+.wx { color: var(--text2); font-size: 13px; min-width: 120px; text-align: right; }
+
+.events { margin-top: 12px; display: none; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--text2); }
+.events.on { display: flex; }
+.ev { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 2px 12px; color: var(--text); }
+
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+.kpi .t { font-size: 12px; color: var(--text2); }
+.kpi .v { font-size: 28px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kpi .v small { font-size: 13px; font-weight: 400; color: var(--text2); margin-left: 3px; }
+.kpi .s { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.main { display: grid; grid-template-columns: 1fr 380px; gap: 12px; margin-top: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
+.card h2 { font-size: 15px; font-weight: 700; }
+.card .note { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+
+#map { height: 520px; border-radius: 6px; border: 1px solid var(--line); background: #eee; }
+.leaflet-tile-pane { filter: grayscale(1) contrast(.85) brightness(1.08); }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--text2); align-items: center; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.legend .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--node); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--node); }
+.nlabel { background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--text); box-shadow: none; white-space: nowrap; }
+.nlabel::before { display: none; }
+.nlabel b { font-variant-numeric: tabular-nums; }
+.leaflet-tooltip.tip { font-size: 12px; border-radius: 4px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 400; color: var(--text2); font-size: 12px; border-bottom: 1px solid var(--line); padding: 4px 4px 6px; }
+td { padding: 6px 4px; border-bottom: 1px solid #efeee9; vertical-align: middle; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr:hover td { background: #f6f6f3; }
+.rk { color: var(--muted); width: 22px; }
+.kind { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.kind i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+.mini { height: 4px; background: #efeee9; border-radius: 2px; margin-top: 4px; }
+.mini > div { height: 4px; border-radius: 2px; }
+.scroll { max-height: 520px; overflow-y: auto; }
+
+.hours { margin-top: 12px; }
+.hbtns { display: flex; gap: 6px; }
+.hbtns button { font: inherit; font-size: 12px; padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--text); cursor: pointer; }
+.hbtns button.on { background: var(--text); border-color: var(--text); color: #fff; }
+#hchart { width: 100%; height: 150px; display: block; cursor: pointer; }
+#hchart text { font-size: 11px; fill: var(--text2); font-family: inherit; }
+
+footer { margin-top: 14px; font-size: 12px; color: var(--text2); line-height: 1.7; }
+footer b { color: var(--text); font-weight: 600; }
+
+.msg { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 14px 22px; box-shadow: 0 4px 20px rgba(0,0,0,.08); z-index: 2000; display: none; }
+.msg.on { display: block; }
+#hoverTip { position: fixed; pointer-events: none; background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font-size: 12px; display: none; z-index: 2000; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+
+@media (max-width: 1000px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .main { grid-template-columns: 1fr; }
+  #map { height: 420px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>水上ビル周辺　人の動き</h1>
+      <div class="sub">豊橋市 駅前大通　｜　BLE（スマートフォンなどの電波）による計測</div>
+    </div>
+    <div class="ctrl">
+      <span class="wx" id="wx"></span>
+      <input type="date" id="date" aria-label="日付">
+      <button id="go">表示</button>
+    </div>
+  </header>
+
+  <div class="events" id="events"></div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="main">
+    <div class="card">
+      <div class="head">
+        <div>
+          <h2 id="mapTitle">拠点と移動の流れ</h2>
+          <div class="note">円の大きさ＝拠点で検知した人数、線の太さ＝拠点から拠点へ移動した人数（矢印の向きに移動）</div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--far)"></i>150m以上の移動</span>
+          <span><i style="background:var(--near)"></i>150m未満の移動</span>
+          <span><i class="dot"></i>計測拠点</span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+    <div class="card">
+      <div class="head">
+        <div>
+          <h2>移動の多いルート</h2>
+          <div class="note" id="rankNote">—</div>
+        </div>
+      </div>
+      <div class="scroll"><table id="rank"></table></div>
+    </div>
+  </section>
+
+  <section class="card hours">
+    <div class="head">
+      <div>
+        <h2>時間帯ごとの動き</h2>
+        <div class="note">各拠点で検知した人数の合計。棒を押すと、その時間だけの地図とルートに切り替わります。</div>
+      </div>
+      <div class="hbtns"><button id="allDay" class="on">終日</button></div>
+    </div>
+    <svg id="hchart" role="img" aria-label="時間帯ごとの検知人数"></svg>
+  </section>
+
+  <footer>
+    <b>計測の方法</b>　各拠点に置いた小型の機器で、スマートフォンなどが出すBLE（Bluetooth Low Energy）の電波を検知しています。端末の識別子は暗号化して扱い、個人を特定することはありません。人数は検知した端末の数による目安で、端末を持たない人や電波を出していない端末は数えられません。<br>
+    <b>移動</b>　同じ端末が、ある拠点で検知されたあとに別の拠点で検知されたものを「移動」として数えています。150m以上の移動は商店街の中を歩いて回った動き、150m未満は隣り合う拠点への短い移動の目安です。<br>
+    <b>データ</b>　ひとなみ舎（水上ビル人流計測）。天気は Open-Meteo、地図は © OpenStreetMap contributors。
+  </footer>
+</div>
+
+<div class="msg" id="msg"></div>
+<div id="hoverTip"></div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbx044_Lz32U4iWo3dvQ1-7wp-OY8SQqf_DjgIhw_XtjRcof2JLW83JdRz1c9Xw6YZ81/exec';
+const CENTER = [34.7619, 137.3870];
+const FAR_M = 150;
+const COL = { near: '#2a78d6', far: '#eb6834', node: '#3a3a37' };
+const WMO = { 0: '晴れ', 1: '晴れ', 2: '晴れ時々くもり', 3: 'くもり', 45: '霧', 48: '霧', 51: '霧雨', 53: '霧雨', 55: '霧雨', 61: '雨', 63: '雨', 65: '強い雨', 71: '雪', 73: '雪', 75: '大雪', 80: 'にわか雨', 81: 'にわか雨', 82: '強いにわか雨', 95: '雷雨' };
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = n => Math.round(n).toLocaleString('ja-JP');
+
+let RAW = null, HOUR = -1;
+
+// ---- 地図
+const map = L.map('map', { center: CENTER, zoom: 17, scrollWheelZoom: false, zoomControl: true });
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+
+// 緯度経度 ⇔ メートル（狭い範囲なので平面で近似）
+const M_LAT = 110540, M_LNG = 111320 * Math.cos(CENTER[0] * Math.PI / 180);
+const toXY = p => [(p[1] - CENTER[1]) * M_LNG, (p[0] - CENTER[0]) * M_LAT];
+const toLL = q => [q[1] / M_LAT + CENTER[0], q[0] / M_LNG + CENTER[1]];
+
+// 行きと帰りが重ならないよう、進行方向の右側にふくらませた曲線
+function curve(a, b) {
+  const A = toXY(a), B = toXY(b);
+  const dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy) || 1;
+  const nx = dy / len, ny = -dx / len, k = Math.min(len * 0.14, 40);
+  const C = [(A[0] + B[0]) / 2 + nx * k, (A[1] + B[1]) / 2 + ny * k];
+  const pts = [];
+  for (let i = 0; i <= 24; i++) {
+    const t = i / 24, u = 1 - t;
+    pts.push([u * u * A[0] + 2 * u * t * C[0] + t * t * B[0], u * u * A[1] + 2 * u * t * C[1] + t * t * B[1]]);
+  }
+  return pts;
+}
+function arrowHead(pts, size) {
+  const i = Math.round(pts.length * 0.62), p = pts[i], q = pts[i - 1];
+  const dx = p[0] - q[0], dy = p[1] - q[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  const tip = [p[0] + ux * size * 0.6, p[1] + uy * size * 0.6];
+  const back = [p[0] - ux * size * 0.6, p[1] - uy * size * 0.6];
+  return [[back[0] - uy * size * 0.55, back[1] + ux * size * 0.55], tip, [back[0] + uy * size * 0.55, back[1] - ux * size * 0.55]].map(toLL);
+}
+
+// ---- データ
+function today() {
+  const d = new Date(Date.now() + 9 * 3600e3);
+  return d.toISOString().slice(0, 10);
+}
+async function load(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { show('日付の形が正しくありません'); return; }
+  const key = 'vf:' + date;
+  show('データを読み込んでいます…');
+  try {
+    let j = null;
+    const c = sessionStorage.getItem(key);
+    if (c && date !== today()) j = JSON.parse(c);
+    if (!j) {
+      const r = await fetch(API, { method: 'POST', body: JSON.stringify({ date }) });
+      j = await r.json();
+      if (j.error) throw new Error(j.error);
+      try { sessionStorage.setItem(key, JSON.stringify(j)); } catch (e) { }
+    }
+    RAW = {
+      date: j.date || date,
+      total: Number(j.total) || 0,
+      events: j.events || [],
+      loc: Object.fromEntries((j.locations || []).map(l => [l.loc_id, [parseFloat(l.lat), parseFloat(l.lng)]])),
+      flows: (j.flows || []).map(f => ({ from: f.from_loc, to: f.to_loc, hour: parseInt(f.hour_jst), d: parseFloat(f.distance), n: parseInt(f.count) || 0 })),
+      pres: (j.presence || []).map(p => ({ id: p.loc_id, hour: parseInt(p.hour_jst), n: parseInt(p.count) || 0, dwell: parseFloat(p.avg_dwell) || 0 })),
+    };
+    HOUR = -1;
+    hide();
+    renderAll();
+    const act = RAW.pres.filter(p => p.n > 0).map(p => RAW.loc[p.id]).filter(Boolean);
+    if (act.length) map.fitBounds(L.latLngBounds(act), { padding: [70, 90], maxZoom: 18 });
+    weather(RAW.date);
+  } catch (e) {
+    show('データを読み込めませんでした（' + esc(e.message) + '）', true);
+  }
+}
+
+function view() {
+  const fl = {}, pr = {};
+  for (const f of RAW.flows) {
+    if (HOUR >= 0 && f.hour !== HOUR) continue;
+    const k = f.from + '|' + f.to;
+    if (!fl[k]) fl[k] = { from: f.from, to: f.to, d: f.d, n: 0 };
+    fl[k].n += f.n;
+  }
+  for (const p of RAW.pres) {
+    if (HOUR >= 0 && p.hour !== HOUR) continue;
+    if (!pr[p.id]) pr[p.id] = { n: 0, dw: 0, dn: 0 };
+    pr[p.id].n += p.n;
+    if (p.dwell > 0) { pr[p.id].dw += p.dwell * p.n; pr[p.id].dn += p.n; }
+  }
+  const flows = Object.values(fl).filter(f => f.n > 0).sort((a, b) => b.n - a.n);
+  return { flows, pr };
+}
+
+// ---- 描画
+function renderAll() {
+  $('date').value = RAW.date;
+  const ev = $('events');
+  if (RAW.events.length) {
+    ev.innerHTML = 'この日の催し：' + RAW.events.map(e => `<span class="ev">${esc(e.title)}${e.locations ? '（' + esc(e.locations) + '）' : ''}</span>`).join('');
+    ev.classList.add('on');
+  } else { ev.innerHTML = ''; ev.classList.remove('on'); }
+  renderView();
+  renderHours();
+}
+
+function renderView() {
+  const { flows, pr } = view();
+  const far = flows.filter(f => f.d >= FAR_M).reduce((s, f) => s + f.n, 0);
+  const all = flows.reduce((s, f) => s + f.n, 0);
+  let dw = 0, dn = 0; Object.values(pr).forEach(p => { dw += p.dw; dn += p.dn; });
+  const peak = Object.entries(pr).sort((a, b) => b[1].n - a[1].n)[0];
+  const sumPr = Object.values(pr).reduce((s, p) => s + p.n, 0);
+  const hl = HOUR >= 0 ? `${HOUR}時台` : '終日';
+
+  const cards = [
+    ['検知した人数', fmt(sumPr), '人', hl + '・各拠点の合計（2か所で検知された人は2回）'],
+    ['移動のあったルート', fmt(flows.length), '本', hl + '・拠点から拠点への向きごと'],
+    ['150m以上の移動の割合', all ? Math.round(far / all * 100) : '—', all ? '%' : '', '移動した人のうち、商店街を歩いて回った人'],
+    ['平均の滞在', dn ? (dw / dn).toFixed(1) : '—', dn ? '分' : '', hl + '・拠点にとどまった時間'],
+    ['いちばん人が多かった拠点', peak ? esc(peak[0]) : '—', '', peak ? fmt(peak[1].n) + '人（' + hl + '）' : ''],
+  ];
+  $('kpis').innerHTML = cards.map(([t, v, u, s]) => `<div class="kpi"><div class="t">${t}</div><div class="v">${v}<small>${u}</small></div><div class="s">${s}</div></div>`).join('');
+  $('mapTitle').textContent = '拠点と移動の流れ（' + hl + '）';
+
+  // 地図
+  layer.clearLayers();
+  const maxF = Math.max(1, ...flows.map(f => f.n));
+  [...flows].reverse().forEach(f => {
+    const a = RAW.loc[f.from], b = RAW.loc[f.to];
+    if (!a || !b) return;
+    const pts = curve(a, b), w = 1.5 + 9 * Math.sqrt(f.n / maxF);
+    const col = f.d >= FAR_M ? COL.far : COL.near;
+    const tip = `<b>${esc(f.from)} → ${esc(f.to)}</b><br>${fmt(f.n)}人・約${Math.round(f.d)}m`;
+    L.polyline(pts.map(toLL), { color: '#fcfcfb', weight: w + 3, opacity: .9, lineCap: 'round' }).addTo(layer);
+    L.polyline(pts.map(toLL), { color: col, weight: w, opacity: .85, lineCap: 'round' }).bindTooltip(tip, { sticky: true, className: 'tip' }).addTo(layer);
+    L.polygon(arrowHead(pts, 6 + w * 0.9), { color: col, weight: 0, fillColor: col, fillOpacity: .95 }).addTo(layer);
+  });
+  const maxP = Math.max(1, ...Object.values(pr).map(p => p.n));
+  const io = {};
+  flows.forEach(f => { (io[f.from] = io[f.from] || { o: 0, i: 0 }).o += f.n; (io[f.to] = io[f.to] || { o: 0, i: 0 }).i += f.n; });
+  // その日に一度も検知がない拠点（停止中・試験用）は出さない
+  const active = new Set(RAW.pres.filter(p => p.n > 0).map(p => p.id));
+  Object.entries(RAW.loc).filter(([name]) => active.has(name)).forEach(([name, ll]) => {
+    const p = pr[name] || { n: 0, dw: 0, dn: 0 }, x = io[name] || { o: 0, i: 0 };
+    const r = p.n ? 6 + 18 * Math.sqrt(p.n / maxP) : 4;
+    L.circleMarker(ll, { radius: r, color: '#fcfcfb', weight: 2, fillColor: p.n ? COL.node : '#b9b8b2', fillOpacity: .9 })
+      .bindTooltip(`<b>${esc(name)}</b><br>検知 ${fmt(p.n)}人${p.dn ? '・平均滞在 ' + (p.dw / p.dn).toFixed(1) + '分' : ''}<br>ここから移動 ${fmt(x.o)}人・ここへ移動 ${fmt(x.i)}人`, { className: 'tip', direction: 'top', offset: [0, -r] })
+      .addTo(layer);
+    L.marker(ll, { icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }), interactive: false })
+      .bindTooltip(`${esc(name)} <b>${fmt(p.n)}</b>`, { permanent: true, direction: 'bottom', offset: [0, r + 4], className: 'nlabel' })
+      .addTo(layer);
+  });
+
+  // ルート表
+  $('rankNote').textContent = flows.length ? `${hl}・${flows.length}本のうち多い順` : `${hl}・移動はありません`;
+  $('rank').innerHTML = '<tr><th class="rk">#</th><th>ルート</th><th class="n">人数</th><th class="n">距離</th></tr>' +
+    flows.slice(0, 20).map((f, i) => {
+      const far = f.d >= FAR_M, col = far ? COL.far : COL.near;
+      return `<tr><td class="rk">${i + 1}</td><td>${esc(f.from)} → ${esc(f.to)}<div class="kind"><i style="background:${col}"></i>${far ? '150m以上' : '150m未満'}</div><div class="mini"><div style="width:${Math.round(f.n / maxF * 100)}%;background:${col}"></div></div></td><td class="n">${fmt(f.n)}</td><td class="n">${Math.round(f.d)}m</td></tr>`;
+    }).join('');
+}
+
+function renderHours() {
+  const svg = $('hchart'), W = svg.clientWidth || 1000, H = 150, L0 = 40, R0 = 8, T0 = 10, B0 = 22;
+  const v = Array(24).fill(0);
+  RAW.pres.forEach(p => { if (p.hour >= 0 && p.hour < 24) v[p.hour] += p.n; });
+  const mx = Math.max(1, ...v);
+  const step = niceStep(mx / 3), top = Math.ceil(mx / step) * step;
+  const bw = (W - L0 - R0) / 24, ph = H - T0 - B0;
+  let s = '';
+  for (let y = 0; y <= top; y += step) {
+    const yy = T0 + ph - y / top * ph;
+    s += `<line x1="${L0}" x2="${W - R0}" y1="${yy}" y2="${yy}" stroke="#ecebe6"/><text x="${L0 - 6}" y="${yy + 4}" text-anchor="end">${fmt(y)}</text>`;
+  }
+  v.forEach((n, h) => {
+    const bh = n / top * ph, x = L0 + h * bw + 1, y = T0 + ph - bh, w = Math.max(2, bw - 2);
+    const col = HOUR === h ? 'var(--bar-on)' : 'var(--bar)';
+    const r = Math.min(4, w / 2, bh);
+    s += `<rect data-h="${h}" x="${L0 + h * bw}" y="${T0}" width="${bw}" height="${ph + B0}" fill="transparent"/>`;
+    if (n > 0) s += `<path d="M${x},${T0 + ph} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${T0 + ph} Z" fill="${col}" pointer-events="none"/>`;
+    if (h % 3 === 0) s += `<text x="${L0 + h * bw + bw / 2}" y="${H - 6}" text-anchor="middle">${h}時</text>`;
+  });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = s;
+  svg.onmousemove = e => {
+    const h = e.target.getAttribute && e.target.getAttribute('data-h');
+    const t = $('hoverTip');
+    if (h == null) { t.style.display = 'none'; return; }
+    t.innerHTML = `<b>${h}時台</b>　${fmt(v[h])}人`;
+    t.style.display = 'block'; t.style.left = (e.clientX + 12) + 'px'; t.style.top = (e.clientY - 28) + 'px';
+  };
+  svg.onmouseleave = () => { $('hoverTip').style.display = 'none'; };
+  svg.onclick = e => {
+    const h = e.target.getAttribute && e.target.getAttribute('data-h');
+    if (h == null) return;
+    HOUR = (HOUR === +h) ? -1 : +h;
+    $('allDay').classList.toggle('on', HOUR < 0);
+    renderView(); renderHours();
+  };
+}
+function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x || 1))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= x) return m * p; return 10 * p; }
+
+async function weather(date) {
+  $('wx').textContent = '';
+  try {
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${CENTER[0]}&longitude=${CENTER[1]}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo&start_date=${date}&end_date=${date}`;
+    const j = await (await fetch(u)).json();
+    const d = j.daily; if (!d || !d.time || !d.time.length) return;
+    $('wx').textContent = `${WMO[d.weathercode[0]] || '—'}　${Math.round(d.temperature_2m_max[0])}℃／${Math.round(d.temperature_2m_min[0])}℃`;
+  } catch (e) { }
+}
+
+function show(t, err) { const m = $('msg'); m.innerHTML = t; m.style.color = err ? '#b42318' : ''; m.classList.add('on'); }
+function hide() { $('msg').classList.remove('on'); }
+
+$('go').onclick = () => load($('date').value);
+$('allDay').onclick = () => { HOUR = -1; $('allDay').classList.add('on'); renderView(); renderHours(); };
+window.addEventListener('resize', () => { if (RAW) renderHours(); });
+$('date').max = today();
+load(today());
+</script>
+</body>
+</html>
